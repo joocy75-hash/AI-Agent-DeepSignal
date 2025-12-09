@@ -2,6 +2,7 @@
 Bitget 시장 데이터 API
 실시간 가격, 호가, 거래 정보 제공
 """
+
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,7 +88,8 @@ async def get_user_bitget_client(
 
     if not all([api_key, api_secret, passphrase]):
         raise HTTPException(
-            status_code=400, detail="API 인증 정보가 불완전합니다. 모든 필드를 입력해주세요."
+            status_code=400,
+            detail="API 인증 정보가 불완전합니다. 모든 필드를 입력해주세요.",
         )
 
     return get_bitget_rest(api_key, api_secret, passphrase)
@@ -117,14 +119,14 @@ async def get_ticker(
         await exchange.close()
 
         return {
-            'symbol': ticker['symbol'],
-            'last': Decimal(str(ticker.get('last', 0))),
-            'bid': Decimal(str(ticker.get('bid', 0))),
-            'ask': Decimal(str(ticker.get('ask', 0))),
-            'high': Decimal(str(ticker.get('high', 0))),
-            'low': Decimal(str(ticker.get('low', 0))),
-            'volume': Decimal(str(ticker.get('volume', 0))),
-            'timestamp': ticker.get('timestamp', 0)
+            "symbol": ticker["symbol"],
+            "last": Decimal(str(ticker.get("last", 0))),
+            "bid": Decimal(str(ticker.get("bid", 0))),
+            "ask": Decimal(str(ticker.get("ask", 0))),
+            "high": Decimal(str(ticker.get("high", 0))),
+            "low": Decimal(str(ticker.get("low", 0))),
+            "volume": Decimal(str(ticker.get("volume", 0))),
+            "timestamp": ticker.get("timestamp", 0),
         }
 
     except HTTPException:
@@ -132,7 +134,8 @@ async def get_ticker(
     except Exception as e:
         logger.error(f"Unexpected error getting ticker {symbol}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"현재가 조회 중 예상치 못한 에러가 발생했습니다: {str(e)}"
+            status_code=500,
+            detail=f"현재가 조회 중 예상치 못한 에러가 발생했습니다: {str(e)}",
         )
 
 
@@ -162,7 +165,9 @@ async def get_orderbook(
         raise
     except Exception as e:
         logger.error(f"Failed to get orderbook: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get orderbook: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get orderbook: {str(e)}"
+        )
 
 
 @router.get("/positions")
@@ -189,7 +194,9 @@ async def get_positions(
         raise
     except Exception as e:
         logger.error(f"Failed to get positions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get positions: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get positions: {str(e)}"
+        )
 
 
 @router.get("/account")
@@ -201,12 +208,45 @@ async def get_account(
     계좌 정보 조회
 
     Returns:
-        계좌 잔고 및 마진 정보
+        계좌 잔고 및 마진 정보 (USDT 선물 계좌)
     """
     try:
         client = await get_user_bitget_client(user_id, session)
-        account = await client.get_account_info()
-        return account
+        account_data = await client.get_account_info()
+
+        # Bitget API returns a list of accounts (one per margin coin)
+        # Extract the USDT account for futures trading
+        if isinstance(account_data, list):
+            usdt_account = None
+            for account in account_data:
+                if account.get("marginCoin", "").upper() == "USDT":
+                    usdt_account = account
+                    break
+
+            if not usdt_account and len(account_data) > 0:
+                # Fallback to first account if no USDT found
+                usdt_account = account_data[0]
+
+            if usdt_account:
+                return {
+                    "marginCoin": usdt_account.get("marginCoin", "USDT"),
+                    "available": usdt_account.get("available", "0"),
+                    "frozen": usdt_account.get("frozen", "0"),
+                    "locked": usdt_account.get("locked", "0"),
+                    "equity": usdt_account.get("equity", "0"),
+                    "usdtEquity": usdt_account.get("usdtEquity", "0"),
+                    "unrealizedPL": usdt_account.get("unrealizedPL", "0"),
+                    "bonus": usdt_account.get("bonus", "0"),
+                    "crossedUnrealizedPL": usdt_account.get("crossedUnrealizedPL", "0"),
+                    "isolatedUnrealizedPL": usdt_account.get(
+                        "isolatedUnrealizedPL", "0"
+                    ),
+                }
+            else:
+                raise HTTPException(status_code=404, detail="No account data found")
+        else:
+            # If it's already a dict (unlikely but handle it)
+            return account_data
 
     except HTTPException:
         raise
@@ -239,7 +279,9 @@ async def get_open_orders(
         raise
     except Exception as e:
         logger.error(f"Failed to get open orders: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get open orders: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get open orders: {str(e)}"
+        )
 
 
 @router.post("/orders/market")
@@ -271,7 +313,7 @@ async def place_market_order(
             symbol=payload.symbol,
             side=payload.side,
             size=payload.size,
-            reduce_only=payload.reduce_only
+            reduce_only=payload.reduce_only,
         )
 
         result = await client.place_market_order(
@@ -288,7 +330,7 @@ async def place_market_order(
             symbol=payload.symbol,
             side=payload.side,
             size=payload.size,
-            order_id=result.get("orderId") if isinstance(result, dict) else None
+            order_id=result.get("orderId") if isinstance(result, dict) else None,
         )
 
         return result
@@ -301,7 +343,7 @@ async def place_market_order(
             "market_order_validation_error",
             "Market order validation failed",
             user_id=user_id,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -312,7 +354,7 @@ async def place_market_order(
             symbol=payload.symbol,
             side=payload.side,
             size=payload.size,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(status_code=500, detail=f"Failed to place order: {str(e)}")
 
@@ -347,7 +389,7 @@ async def place_limit_order(
             side=payload.side,
             size=payload.size,
             price=payload.price,
-            reduce_only=payload.reduce_only
+            reduce_only=payload.reduce_only,
         )
 
         result = await client.place_limit_order(
@@ -366,7 +408,7 @@ async def place_limit_order(
             side=payload.side,
             size=payload.size,
             price=payload.price,
-            order_id=result.get("orderId") if isinstance(result, dict) else None
+            order_id=result.get("orderId") if isinstance(result, dict) else None,
         )
 
         return result
@@ -379,7 +421,7 @@ async def place_limit_order(
             "limit_order_validation_error",
             "Limit order validation failed",
             user_id=user_id,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -391,7 +433,7 @@ async def place_limit_order(
             side=payload.side,
             size=payload.size,
             price=payload.price,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(status_code=500, detail=f"Failed to place order: {str(e)}")
 
@@ -449,9 +491,13 @@ async def close_position(
 
         client = await get_user_bitget_client(user_id, session)
 
-        position_side = PositionSide.LONG if payload.side.lower() == "long" else PositionSide.SHORT
+        position_side = (
+            PositionSide.LONG if payload.side.lower() == "long" else PositionSide.SHORT
+        )
 
-        result = await client.close_position(payload.symbol, position_side, payload.size)
+        result = await client.close_position(
+            payload.symbol, position_side, payload.size
+        )
 
         logger.info(f"Position closed: {payload.symbol} {payload.side}")
         return result
@@ -464,7 +510,9 @@ async def close_position(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to close position: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to close position: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to close position: {str(e)}"
+        )
 
 
 @router.post("/leverage")
