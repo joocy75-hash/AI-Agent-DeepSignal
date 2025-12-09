@@ -185,10 +185,25 @@ async def get_positions(
     Returns:
         포지션 리스트
     """
+    from ..utils.cache_manager import cache_manager, make_cache_key
+
+    # 캐시 키 생성 (심볼이 있으면 포함)
+    cache_suffix = f"positions:{symbol}" if symbol else "positions"
+    cache_key = make_cache_key(cache_suffix, user_id)
+
+    # 캐시 확인 (3초 TTL - 포지션은 빠르게 변할 수 있음)
+    cached_data = await cache_manager.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+
     try:
         client = await get_user_bitget_client(user_id, session)
         positions = await client.get_positions(symbol=symbol)
-        return {"positions": positions}
+        response = {"positions": positions}
+
+        # 캐시 저장
+        await cache_manager.set(cache_key, response, ttl=3)
+        return response
 
     except HTTPException:
         raise
@@ -210,12 +225,21 @@ async def get_account(
     Returns:
         계좌 잔고 및 마진 정보 (USDT 선물 계좌)
     """
+    from ..utils.cache_manager import cache_manager, make_cache_key
+
+    # 캐시 확인 (5초 TTL)
+    cache_key = make_cache_key("bitget_account", user_id)
+    cached_data = await cache_manager.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+
     try:
         client = await get_user_bitget_client(user_id, session)
         account_data = await client.get_account_info()
 
         # Bitget API returns a list of accounts (one per margin coin)
         # Extract the USDT account for futures trading
+        response_data = None
         if isinstance(account_data, list):
             usdt_account = None
             for account in account_data:
@@ -228,7 +252,7 @@ async def get_account(
                 usdt_account = account_data[0]
 
             if usdt_account:
-                return {
+                response_data = {
                     "marginCoin": usdt_account.get("marginCoin", "USDT"),
                     "available": usdt_account.get("available", "0"),
                     "frozen": usdt_account.get("frozen", "0"),
@@ -246,7 +270,13 @@ async def get_account(
                 raise HTTPException(status_code=404, detail="No account data found")
         else:
             # If it's already a dict (unlikely but handle it)
-            return account_data
+            response_data = account_data
+
+        # 캐시 저장
+        if response_data:
+            await cache_manager.set(cache_key, response_data, ttl=5)
+
+        return response_data
 
     except HTTPException:
         raise
