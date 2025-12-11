@@ -143,27 +143,35 @@ async def list_ai_strategies(
         f"[Strategy List] User {user_id}: Found {len(strategies)} strategies (including public)"
     )
 
+    def parse_strategy(s):
+        params = json.loads(s.params) if s.params else {}
+        leverage = params.get("leverage", 1)
+        # 위험도 결정: leverage 기준
+        if leverage >= 10:
+            risk_level = "high"
+        elif leverage >= 5:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        return {
+            "id": s.id,
+            "name": s.name,
+            "description": s.description or "",
+            "type": params.get("type", "CUSTOM"),
+            "symbol": params.get("symbol", "BTC/USDT"),
+            "timeframe": params.get("timeframe", "1h"),
+            "leverage": leverage,
+            "risk_level": params.get("risk_level", risk_level),
+            "stop_loss": params.get("stop_loss", 1.5),
+            "take_profit": params.get("take_profit", 3.0),
+            "parameters": params,
+            "is_active": s.is_active if hasattr(s, "is_active") else False,
+            "created_at": None,
+        }
+
     return {
-        "strategies": [
-            {
-                "id": s.id,
-                "name": s.name,
-                "description": s.description or "",
-                "type": json.loads(s.params).get("type", "CUSTOM")
-                if s.params
-                else "CUSTOM",
-                "symbol": json.loads(s.params).get("symbol", "BTC/USDT")
-                if s.params
-                else "BTC/USDT",
-                "timeframe": json.loads(s.params).get("timeframe", "1h")
-                if s.params
-                else "1h",
-                "parameters": json.loads(s.params) if s.params else {},
-                "is_active": s.is_active if hasattr(s, "is_active") else False,
-                "created_at": None,
-            }
-            for s in strategies
-        ]
+        "strategies": [parse_strategy(s) for s in strategies]
     }
 
 

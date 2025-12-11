@@ -1,13 +1,33 @@
 """
 동적 전략 실행기
 사용자가 생성한 전략 코드를 안전하게 실행
+
+⚠️ SECURITY WARNING:
+이 모듈은 exec()를 사용하여 코드를 실행합니다.
+반드시 신뢰할 수 있는 사전 정의된 전략 파일만 사용해야 합니다.
+사용자 입력 코드를 직접 실행하면 안 됩니다.
 """
 
 import logging
+import os
 from typing import Dict, List, Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# 허용된 전략 파일 목록 (화이트리스트)
+ALLOWED_STRATEGY_FILES = {
+    "proven_conservative_strategy.py",
+    "proven_balanced_strategy.py",
+    "proven_aggressive_strategy.py",
+    "proven_rsi_meanreversion_strategy.py",
+    "proven_bollinger_scalping_strategy.py",
+}
+
+
+class SecurityError(Exception):
+    """보안 관련 예외 - 위험한 코드 실행 시도 시 발생"""
+    pass
 
 
 class DynamicStrategyExecutor:
@@ -61,8 +81,30 @@ class DynamicStrategyExecutor:
         )
 
     def _compile_strategy(self):
-        """전략 코드 컴파일"""
+        """전략 코드 컴파일
+
+        ⚠️ SECURITY: exec()는 위험한 함수입니다.
+        이 메서드는 반드시 사전 정의된 전략 파일의 코드만 실행해야 합니다.
+        사용자 입력 코드를 직접 실행하면 시스템 명령 실행, 데이터 탈취 등
+        심각한 보안 문제가 발생할 수 있습니다.
+        """
         try:
+            # 보안 검사: 위험한 키워드 차단
+            dangerous_keywords = [
+                "__import__", "import os", "import sys", "import subprocess",
+                "eval(", "exec(", "compile(", "open(", "file(",
+                "os.system", "os.popen", "subprocess.", "commands.",
+                "__builtins__", "__code__", "__globals__",
+                "getattr(", "setattr(", "delattr(",
+            ]
+
+            code_lower = self.strategy_code.lower()
+            for keyword in dangerous_keywords:
+                if keyword.lower() in code_lower:
+                    logger.error(f"[SECURITY] Blocked dangerous keyword in strategy code: {keyword}")
+                    raise SecurityError(f"Strategy code contains blocked keyword: {keyword}")
+
+            # 허용된 import만 체크 (numpy는 이미 namespace에 제공됨)
             exec(self.strategy_code, self.namespace)
             logger.info("Strategy code compiled successfully")
         except Exception as e:

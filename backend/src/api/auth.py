@@ -11,6 +11,7 @@ from ..schemas.auth_schema import (
     TokenResponse,
 )
 from ..utils.jwt_auth import JWTAuth, get_current_user_id
+from ..utils.auth_dependencies import require_admin
 from ..utils.exceptions import DuplicateResourceError, AuthenticationError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -117,9 +118,9 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
 @router.get("/users")
 async def get_users(
     session: AsyncSession = Depends(get_session),
-    current_user_id: int = Depends(get_current_user_id),
+    admin_id: int = Depends(require_admin),  # SECURITY: 관리자만 접근 가능
 ):
-    """모든 사용자 목록 조회 (인증 필요)"""
+    """모든 사용자 목록 조회 (관리자 권한 필요)"""
     result = await session.execute(select(User))
     users = result.scalars().all()
 

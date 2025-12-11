@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { createChart } from 'lightweight-charts';
 import { Modal, Input, Switch, Space, Typography } from 'antd';
 import { SearchOutlined, DownOutlined } from '@ant-design/icons';
@@ -55,7 +55,7 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-export default function TradingChart({
+function TradingChart({
   data = [],
   symbol = 'BTC/USDT',
   height = 500,
@@ -82,10 +82,7 @@ export default function TradingChart({
     const container = chartContainerRef.current;
     const chartWidth = container.clientWidth;
 
-    console.log('[TradingChart] Initializing with width:', chartWidth);
-
     if (chartWidth === 0) {
-      console.warn('[TradingChart] Container width is 0, waiting...');
       return;
     }
 
@@ -130,7 +127,6 @@ export default function TradingChart({
     chartRef.current = chart;
     candlestickSeriesRef.current = candlestickSeries;
 
-    console.log('[TradingChart] Chart initialized successfully');
 
     // Handle resize
     const handleResize = () => {
@@ -155,11 +151,8 @@ export default function TradingChart({
   // Update data and markers when they change
   useEffect(() => {
     if (!candlestickSeriesRef.current || !data || data.length === 0) {
-      console.log('[TradingChart] No data or series not ready');
       return;
     }
-
-    console.log('[TradingChart] Updating with', data.length, 'candles');
 
     const candleData = data
       .filter(c => c.time && c.open && c.high && c.low && c.close)
@@ -173,7 +166,6 @@ export default function TradingChart({
       .sort((a, b) => a.time - b.time);
 
     if (candleData.length === 0) {
-      console.warn('[TradingChart] No valid candles');
       return;
     }
 

@@ -123,3 +123,111 @@ class PerformanceStats(BaseModel):
     worst_trade_pnl: float
     avg_trade_duration_minutes: float
     max_drawdown_percent: float
+
+
+# ==================== 확장된 알림 타입 ====================
+
+
+class OrderInfo(BaseModel):
+    """주문 정보 (지정가 주문용)"""
+
+    symbol: str
+    order_type: Literal["limit", "market", "stop_limit", "stop_market"]
+    direction: Literal["Long", "Short"]
+    price: float  # 주문 가격
+    quantity: float
+    leverage: int = 1
+    order_id: Optional[str] = None
+    timestamp: datetime = datetime.now()
+
+
+class OrderFilledInfo(BaseModel):
+    """주문 체결 정보"""
+
+    symbol: str
+    order_type: str
+    direction: Literal["Long", "Short"]
+    order_price: float  # 주문 가격
+    filled_price: float  # 체결 가격
+    quantity: float
+    leverage: int = 1
+    slippage_percent: float = 0.0  # 슬리피지
+    order_id: Optional[str] = None
+    timestamp: datetime = datetime.now()
+
+
+class StopLossInfo(BaseModel):
+    """손절 정보"""
+
+    symbol: str
+    direction: Literal["Long", "Short"]
+    entry_price: float
+    stop_price: float
+    exit_price: float
+    quantity: float
+    leverage: int = 1
+    pnl_usdt: float
+    pnl_percent: float
+    duration_minutes: float = 0.0
+    timestamp: datetime = datetime.now()
+
+
+class TakeProfitInfo(BaseModel):
+    """익절 정보"""
+
+    symbol: str
+    direction: Literal["Long", "Short"]
+    entry_price: float
+    target_price: float
+    exit_price: float
+    quantity: float
+    leverage: int = 1
+    pnl_usdt: float
+    pnl_percent: float
+    duration_minutes: float = 0.0
+    timestamp: datetime = datetime.now()
+
+
+class PartialCloseInfo(BaseModel):
+    """부분 청산 정보"""
+
+    symbol: str
+    direction: Literal["Long", "Short"]
+    entry_price: float
+    exit_price: float
+    closed_quantity: float
+    remaining_quantity: float
+    pnl_usdt: float
+    pnl_percent: float
+    close_reason: str  # "partial_tp", "reduce_risk", "signal"
+    timestamp: datetime = datetime.now()
+
+
+class RiskAlertInfo(BaseModel):
+    """리스크 경고 정보"""
+
+    alert_type: Literal[
+        "daily_loss_limit",
+        "max_positions",
+        "high_leverage",
+        "large_position",
+        "high_drawdown",
+        "margin_call",
+    ]
+    message: str
+    current_value: float
+    limit_value: float
+    action_taken: Optional[str] = None  # "blocked", "reduced", "warning_only"
+    timestamp: datetime = datetime.now()
+
+
+class SignalInfo(BaseModel):
+    """전략 시그널 정보"""
+
+    symbol: str
+    signal_type: Literal["buy", "sell", "close", "hold"]
+    confidence: float  # 0.0 ~ 1.0
+    reason: str
+    strategy_name: str
+    current_price: float
+    timestamp: datetime = datetime.now()

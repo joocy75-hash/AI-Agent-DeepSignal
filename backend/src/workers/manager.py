@@ -36,6 +36,10 @@ class BotManager:
 
             for status in bot_statuses:
                 try:
+                    # 로그 핸들러 추가 (복구된 봇에도 적용)
+                    from ..utils.log_broadcaster import attach_log_handler
+                    attach_log_handler(status.user_id)
+
                     await self.runner.start(self.session_factory, status.user_id)
                     started_count += 1
                     logger.info(f"✅ Bot restored for user {status.user_id}")
@@ -51,7 +55,15 @@ class BotManager:
             )
 
     async def start_bot(self, user_id: int):
+        # 로그 핸들러 추가 (봇 시작 전)
+        from ..utils.log_broadcaster import attach_log_handler
+        attach_log_handler(user_id)
+
         await self.runner.start(self.session_factory, user_id)
 
     async def stop_bot(self, user_id: int):
+        # 로그 핸들러 제거
+        from ..utils.log_broadcaster import detach_log_handler
+        detach_log_handler(user_id)
+
         self.runner.stop(user_id)

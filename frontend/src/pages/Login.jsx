@@ -390,13 +390,17 @@ export default function Login() {
               <span>카카오로 로그인</span>
             </Button>
           </Space>
-          <div style={{ marginTop: 20 }}>
-            <Divider style={{ margin: '16px 0' }}>테스트 계정</Divider>
-            <div style={{ padding: 14, background: '#f8f9fa', borderRadius: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><Text style={{ color: '#86868b', fontSize: 13 }}>이메일:</Text><Text strong copyable style={{ fontSize: 13 }}>admin@admin.com</Text></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text style={{ color: '#86868b', fontSize: 13 }}>비밀번호:</Text><Text strong copyable style={{ fontSize: 13 }}>admin123</Text></div>
+          {/* SECURITY: 테스트 계정 정보는 개발 환경에서만 표시 */}
+          {import.meta.env.DEV && (
+            <div style={{ marginTop: 20 }}>
+              <Divider style={{ margin: '16px 0' }}>테스트 계정 (개발용)</Divider>
+              <div style={{ padding: 14, background: '#fff3cd', borderRadius: 8, border: '1px solid #ffc107' }}>
+                <div style={{ marginBottom: 8, color: '#856404', fontSize: 12 }}>⚠️ 개발 환경에서만 표시됩니다</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><Text style={{ color: '#86868b', fontSize: 13 }}>이메일:</Text><Text strong copyable style={{ fontSize: 13 }}>admin@admin.com</Text></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text style={{ color: '#86868b', fontSize: 13 }}>비밀번호:</Text><Text strong copyable style={{ fontSize: 13 }}>admin123</Text></div>
+              </div>
             </div>
-          </div>
+          )}
         </>
       ),
     },

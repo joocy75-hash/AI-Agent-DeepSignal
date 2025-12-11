@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Row, Col, Card, Tag, Table, Empty } from 'antd';
+import { Row, Col, Card, Tag, Table, Empty, Skeleton } from 'antd';
 import {
   LineChartOutlined,
   BarChartOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
   DollarOutlined,
-  WalletOutlined,
   TrophyOutlined,
   ThunderboltOutlined,
   SwapOutlined,
-  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useWebSocket } from '../context/WebSocketContext';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -21,8 +19,8 @@ import { botAPI } from '../api/bot';
 import { analyticsAPI } from '../api/analytics';
 import { orderAPI } from '../api/order';
 
-// Apple 스타일 통계 카드 컴포넌트 (모바일 최적화)
-const StatCard = ({ title, value, suffix, trend, trendValue, icon, delay = 0, isMobile = false }) => {
+// Apple 스타일 통계 카드 컴포넌트 (모바일 최적화 + 로딩 상태)
+const StatCard = ({ title, value, suffix, trend, trendValue, icon, delay = 0, isMobile = false, loading = false }) => {
   const isPositive = trend === 'up';
   const isNegative = trend === 'down';
 
@@ -41,7 +39,7 @@ const StatCard = ({ title, value, suffix, trend, trendValue, icon, delay = 0, is
       className="stat-card-hover"
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{
             fontSize: isMobile ? 11 : 13,
             color: '#86868b',
@@ -51,17 +49,21 @@ const StatCard = ({ title, value, suffix, trend, trendValue, icon, delay = 0, is
           }}>
             {title}
           </div>
-          <div style={{
-            fontSize: isMobile ? 20 : 28,
-            fontWeight: 600,
-            color: '#1d1d1f',
-            letterSpacing: '-0.02em',
-            lineHeight: 1.2,
-          }}>
-            {value}
-            {suffix && <span style={{ fontSize: isMobile ? 12 : 16, marginLeft: 2, color: '#86868b' }}>{suffix}</span>}
-          </div>
-          {trendValue !== undefined && (
+          {loading ? (
+            <Skeleton.Input active size="small" style={{ width: 80, height: isMobile ? 24 : 32 }} />
+          ) : (
+            <div style={{
+              fontSize: isMobile ? 20 : 28,
+              fontWeight: 600,
+              color: '#1d1d1f',
+              letterSpacing: '-0.02em',
+              lineHeight: 1.2,
+            }}>
+              {value}
+              {suffix && <span style={{ fontSize: isMobile ? 12 : 16, marginLeft: 2, color: '#86868b' }}>{suffix}</span>}
+            </div>
+          )}
+          {trendValue !== undefined && !loading && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -98,8 +100,8 @@ const StatCard = ({ title, value, suffix, trend, trendValue, icon, delay = 0, is
   );
 };
 
-// 포지션 카드 (Long/Short 표시) - 모바일 최적화
-const PositionCard = ({ longCount, shortCount, delay = 0, isMobile = false }) => {
+// 포지션 카드 (Long/Short 표시) - 모바일 최적화 + 로딩 상태
+const PositionCard = ({ longCount, shortCount, delay = 0, isMobile = false, loading = false }) => {
   return (
     <div
       style={{
@@ -114,7 +116,7 @@ const PositionCard = ({ longCount, shortCount, delay = 0, isMobile = false }) =>
       className="stat-card-hover"
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{
             fontSize: isMobile ? 11 : 13,
             color: '#86868b',
@@ -124,55 +126,59 @@ const PositionCard = ({ longCount, shortCount, delay = 0, isMobile = false }) =>
           }}>
             포지션
           </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: isMobile ? 6 : 12,
-            marginTop: isMobile ? 2 : 4,
-          }}>
-            {/* Long */}
+          {loading ? (
+            <Skeleton.Input active size="small" style={{ width: 120, height: isMobile ? 24 : 32 }} />
+          ) : (
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: isMobile ? 2 : 4,
+              gap: isMobile ? 6 : 12,
+              marginTop: isMobile ? 2 : 4,
             }}>
-              <ArrowUpOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#34c759' }} />
-              <span style={{
-                fontSize: isMobile ? 11 : 14,
-                fontWeight: 600,
-                color: '#34c759',
-              }}>Long</span>
-              <span style={{
-                fontSize: isMobile ? 16 : 22,
-                fontWeight: 700,
-                color: '#1d1d1f',
-                marginLeft: isMobile ? 1 : 2,
-              }}>{longCount}</span>
-            </div>
+              {/* Long */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: isMobile ? 2 : 4,
+              }}>
+                <ArrowUpOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#34c759' }} />
+                <span style={{
+                  fontSize: isMobile ? 11 : 14,
+                  fontWeight: 600,
+                  color: '#34c759',
+                }}>Long</span>
+                <span style={{
+                  fontSize: isMobile ? 16 : 22,
+                  fontWeight: 700,
+                  color: '#1d1d1f',
+                  marginLeft: isMobile ? 1 : 2,
+                }}>{longCount}</span>
+              </div>
 
-            {/* Divider */}
-            <span style={{ color: '#d2d2d7', fontSize: isMobile ? 16 : 20 }}>/</span>
+              {/* Divider */}
+              <span style={{ color: '#d2d2d7', fontSize: isMobile ? 16 : 20 }}>/</span>
 
-            {/* Short */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: isMobile ? 2 : 4,
-            }}>
-              <ArrowDownOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#ff3b30' }} />
-              <span style={{
-                fontSize: isMobile ? 11 : 14,
-                fontWeight: 600,
-                color: '#ff3b30',
-              }}>Short</span>
-              <span style={{
-                fontSize: isMobile ? 16 : 22,
-                fontWeight: 700,
-                color: '#1d1d1f',
-                marginLeft: isMobile ? 1 : 2,
-              }}>{shortCount}</span>
+              {/* Short */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: isMobile ? 2 : 4,
+              }}>
+                <ArrowDownOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#ff3b30' }} />
+                <span style={{
+                  fontSize: isMobile ? 11 : 14,
+                  fontWeight: 600,
+                  color: '#ff3b30',
+                }}>Short</span>
+                <span style={{
+                  fontSize: isMobile ? 16 : 22,
+                  fontWeight: 700,
+                  color: '#1d1d1f',
+                  marginLeft: isMobile ? 1 : 2,
+                }}>{shortCount}</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <div style={{
           width: isMobile ? 32 : 48,
@@ -192,8 +198,8 @@ const PositionCard = ({ longCount, shortCount, delay = 0, isMobile = false }) =>
   );
 };
 
-// 최대 이익/손실 카드 - 모바일 최적화
-const ProfitLossCard = ({ bestTrade, worstTrade, delay = 0, isMobile = false }) => {
+// 최대 이익/손실 카드 - 모바일 최적화 + 로딩 상태
+const ProfitLossCard = ({ bestTrade, worstTrade, delay = 0, isMobile = false, loading = false }) => {
   return (
     <div
       style={{
@@ -208,7 +214,7 @@ const ProfitLossCard = ({ bestTrade, worstTrade, delay = 0, isMobile = false }) 
       className="stat-card-hover"
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{
             fontSize: isMobile ? 11 : 13,
             color: '#86868b',
@@ -218,47 +224,51 @@ const ProfitLossCard = ({ bestTrade, worstTrade, delay = 0, isMobile = false }) 
           }}>
             최대 이익 / 손실
           </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: isMobile ? 6 : 12,
-            marginTop: isMobile ? 2 : 4,
-          }}>
-            {/* Best Trade */}
+          {loading ? (
+            <Skeleton.Input active size="small" style={{ width: 120, height: isMobile ? 24 : 32 }} />
+          ) : (
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: isMobile ? 1 : 2,
+              gap: isMobile ? 6 : 12,
+              marginTop: isMobile ? 2 : 4,
             }}>
-              <ArrowUpOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#34c759' }} />
-              <span style={{
-                fontSize: isMobile ? 16 : 22,
-                fontWeight: 700,
-                color: '#34c759',
-                fontFamily: 'SF Mono, Monaco, monospace',
-              }}>+{Math.round(bestTrade)}</span>
-              <span style={{ fontSize: isMobile ? 11 : 14, color: '#34c759', fontWeight: 600 }}>%</span>
-            </div>
+              {/* Best Trade */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: isMobile ? 1 : 2,
+              }}>
+                <ArrowUpOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#34c759' }} />
+                <span style={{
+                  fontSize: isMobile ? 16 : 22,
+                  fontWeight: 700,
+                  color: '#34c759',
+                  fontFamily: 'SF Mono, Monaco, monospace',
+                }}>+{Math.round(bestTrade)}</span>
+                <span style={{ fontSize: isMobile ? 11 : 14, color: '#34c759', fontWeight: 600 }}>%</span>
+              </div>
 
-            {/* Divider */}
-            <span style={{ color: '#d2d2d7', fontSize: isMobile ? 16 : 20 }}>/</span>
+              {/* Divider */}
+              <span style={{ color: '#d2d2d7', fontSize: isMobile ? 16 : 20 }}>/</span>
 
-            {/* Worst Trade */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: isMobile ? 1 : 2,
-            }}>
-              <ArrowDownOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#ff3b30' }} />
-              <span style={{
-                fontSize: isMobile ? 16 : 22,
-                fontWeight: 700,
-                color: '#ff3b30',
-                fontFamily: 'SF Mono, Monaco, monospace',
-              }}>{Math.round(worstTrade)}</span>
-              <span style={{ fontSize: isMobile ? 11 : 14, color: '#ff3b30', fontWeight: 600 }}>%</span>
+              {/* Worst Trade */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: isMobile ? 1 : 2,
+              }}>
+                <ArrowDownOutlined style={{ fontSize: isMobile ? 12 : 16, color: '#ff3b30' }} />
+                <span style={{
+                  fontSize: isMobile ? 16 : 22,
+                  fontWeight: 700,
+                  color: '#ff3b30',
+                  fontFamily: 'SF Mono, Monaco, monospace',
+                }}>{Math.round(worstTrade)}</span>
+                <span style={{ fontSize: isMobile ? 11 : 14, color: '#ff3b30', fontWeight: 600 }}>%</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <div style={{
           width: isMobile ? 32 : 48,
@@ -469,6 +479,7 @@ export default function Dashboard() {
   const [periodProfits, setPeriodProfits] = useState(null);
   const [recentTrades, setRecentTrades] = useState([]);
   const [tradesLoading, setTradesLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const { subscribe, isConnected } = useWebSocket();
 
   const loadBotStatus = async () => {
@@ -502,50 +513,44 @@ export default function Dashboard() {
     }
   };
 
-  const loadTradeStats = async () => {
+  // 최적화: 모든 기간 데이터를 한번에 로드
+  const loadAllAnalytics = async () => {
     try {
-      const [performance, riskMetrics] = await Promise.all([
+      // 모든 API를 병렬로 호출
+      const [riskMetrics, perfAll, perfDaily, perfWeekly, perfMonthly] = await Promise.all([
+        analyticsAPI.getRiskMetrics(),
         analyticsAPI.getPerformanceMetrics('all'),
-        analyticsAPI.getRiskMetrics()
-      ]);
-
-      setTradeStats({
-        totalTrades: riskMetrics.total_trades || 0,
-        winRate: riskMetrics.win_rate || 0,
-        winningTrades: performance.winning_trades || 0,
-        losingTrades: performance.losing_trades || 0,
-        avgPnl: performance.total_pnl && performance.total_trades
-          ? (performance.total_pnl / performance.total_trades).toFixed(2)
-          : 0,
-        totalReturn: performance.total_return || 0,
-        bestTrade: performance.best_trade?.pnl_percent || 0,
-        worstTrade: performance.worst_trade?.pnl_percent || 0,
-        longCount: performance.total_trades || 0,
-        shortCount: 0,
-      });
-    } catch (error) {
-      console.error('[Dashboard] Error loading trade stats:', error);
-      setTradeStats(null);
-    }
-  };
-
-  const loadPeriodProfits = async () => {
-    try {
-      const [daily, weekly, monthly, allTime] = await Promise.all([
         analyticsAPI.getPerformanceMetrics('1d'),
         analyticsAPI.getPerformanceMetrics('1w'),
         analyticsAPI.getPerformanceMetrics('1m'),
-        analyticsAPI.getPerformanceMetrics('all')
       ]);
 
+      // tradeStats 설정
+      setTradeStats({
+        totalTrades: riskMetrics.total_trades || 0,
+        winRate: riskMetrics.win_rate || 0,
+        winningTrades: perfAll.winning_trades || 0,
+        losingTrades: perfAll.losing_trades || 0,
+        avgPnl: perfAll.total_pnl && perfAll.total_trades
+          ? (perfAll.total_pnl / perfAll.total_trades).toFixed(2)
+          : 0,
+        totalReturn: perfAll.total_return || 0,
+        bestTrade: perfAll.best_trade?.pnl_percent || 0,
+        worstTrade: perfAll.worst_trade?.pnl_percent || 0,
+        longCount: perfAll.total_trades || 0,
+        shortCount: 0,
+      });
+
+      // periodProfits 설정
       setPeriodProfits({
-        daily: { return: daily.total_return || 0, pnl: daily.total_pnl || 0 },
-        weekly: { return: weekly.total_return || 0, pnl: weekly.total_pnl || 0 },
-        monthly: { return: monthly.total_return || 0, pnl: monthly.total_pnl || 0 },
-        allTime: { return: allTime.total_return || 0, pnl: allTime.total_pnl || 0 },
+        daily: { return: perfDaily.total_return || 0, pnl: perfDaily.total_pnl || 0 },
+        weekly: { return: perfWeekly.total_return || 0, pnl: perfWeekly.total_pnl || 0 },
+        monthly: { return: perfMonthly.total_return || 0, pnl: perfMonthly.total_pnl || 0 },
+        allTime: { return: perfAll.total_return || 0, pnl: perfAll.total_pnl || 0 },
       });
     } catch (error) {
-      console.error('[Dashboard] Error loading period profits:', error);
+      console.error('[Dashboard] Error loading analytics:', error);
+      setTradeStats(null);
       setPeriodProfits(null);
     }
   };
@@ -564,19 +569,27 @@ export default function Dashboard() {
     }
   };
 
+  // 초기 데이터 병렬 로딩 (성능 최적화 - API 호출 수 10개 -> 6개로 감소)
+  const loadAllData = async () => {
+    try {
+      await Promise.all([
+        loadBotStatus(),
+        loadPrices(),
+        loadAllAnalytics(),  // 통합된 analytics 로딩
+        loadRecentTrades()
+      ]);
+    } catch (error) {
+      console.error('[Dashboard] Error loading data:', error);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadBotStatus();
-    loadPrices();
-    loadTradeStats();
-    loadPeriodProfits();
-    loadRecentTrades();
+    loadAllData();
 
     const interval = setInterval(() => {
-      loadBotStatus();
-      loadPrices();
-      loadTradeStats();
-      loadPeriodProfits();
-      loadRecentTrades();
+      loadAllData();
     }, 30000);
 
     return () => clearInterval(interval);
@@ -610,6 +623,7 @@ export default function Dashboard() {
             icon={<BarChartOutlined />}
             delay={0}
             isMobile={isMobile}
+            loading={initialLoading}
           />
         </Col>
         <Col xs={12} sm={12} md={6}>
@@ -618,6 +632,7 @@ export default function Dashboard() {
             shortCount={tradeStats?.shortCount || 0}
             delay={0.1}
             isMobile={isMobile}
+            loading={initialLoading}
           />
         </Col>
         <Col xs={12} sm={12} md={6}>
@@ -626,6 +641,7 @@ export default function Dashboard() {
             worstTrade={tradeStats?.worstTrade || 0}
             delay={0.2}
             isMobile={isMobile}
+            loading={initialLoading}
           />
         </Col>
         <Col xs={12} sm={12} md={6}>
@@ -637,6 +653,7 @@ export default function Dashboard() {
             icon={<ThunderboltOutlined />}
             delay={0.3}
             isMobile={isMobile}
+            loading={initialLoading}
           />
         </Col>
       </Row>

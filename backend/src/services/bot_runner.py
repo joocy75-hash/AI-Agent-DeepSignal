@@ -30,7 +30,14 @@ from ..services.exchanges import exchange_manager
 from ..services.bitget_rest import get_bitget_rest, OrderSide
 from ..utils.crypto_secrets import decrypt_secret
 from ..websockets.ws_server import broadcast_to_user
-from ..services.telegram import get_telegram_notifier, TradeInfo, TradeResult
+from ..services.telegram import (
+    get_telegram_notifier,
+    TradeResult,
+    OrderFilledInfo,
+    StopLossInfo,
+    TakeProfitInfo,
+    RiskAlertInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -632,7 +639,98 @@ class BotRunner:
                                     reduce_only=True,
                                 )
 
-                                # 포지션 초기화
+                                # PnL 계산 및 거래 기록 업데이트
+                                entry_price = current_position["entry_price"]
+                                exit_price = price
+                                position_size = current_position["size"]
+                                leverage = current_position.get("leverage", 10)
+                                trade_id = current_position.get("trade_id")
+
+                                # PnL 계산 (Long: 청산가 - 진입가, Short: 진입가 - 청산가)
+                                if current_position["side"] == "long":
+                                    pnl_usdt = (exit_price - entry_price) * position_size * leverage
+                                    pnl_percent = ((exit_price - entry_price) / entry_price) * 100 * leverage
+                                else:  # short
+                                    pnl_usdt = (entry_price - exit_price) * position_size * leverage
+                                    pnl_percent = ((entry_price - exit_price) / entry_price) * 100 * leverage
+
+                                logger.info(
+                                    f"💰 PnL calculated for user {user_id}: "
+                                    f"Entry: ${entry_price:.2f}, Exit: ${exit_price:.2f}, "
+                                    f"PnL: ${pnl_usdt:.2f} ({pnl_percent:.2f}%)"
+                                )
+
+                                # Trade 레코드 업데이트
+                                if trade_id:
+                                    await self._update_trade_exit(
+                                        session,
+                                        trade_id,
+                                        exit_price,
+                                        pnl_usdt,
+                                        pnl_percent,
+                                        signal_reason,
+                                    )
+
+                                # 📱 텔레그램 알림 전송 (청산 유형별 상세 알림) - 포지션 초기화 전에 전송!
+                                position_side = current_position["side"]
+                                try:
+                                    notifier = get_telegram_notifier()
+                                    if notifier.is_enabled():
+                                        direction = "Long" if position_side == "long" else "Short"
+
+                                        # 청산 사유에 따라 다른 알림 유형 사용
+                                        if "stop_loss" in signal_reason.lower() or "손절" in signal_reason:
+                                            # 손절 알림
+                                            stop_loss_info = StopLossInfo(
+                                                symbol=symbol,
+                                                direction=direction,
+                                                entry_price=entry_price,
+                                                stop_price=exit_price,
+                                                exit_price=exit_price,
+                                                quantity=position_size,
+                                                leverage=leverage,
+                                                pnl_usdt=pnl_usdt,
+                                                pnl_percent=pnl_percent,
+                                            )
+                                            await notifier.notify_stop_loss(stop_loss_info)
+                                            logger.info(f"📱 Telegram: Stop loss notification sent for user {user_id}")
+
+                                        elif "take_profit" in signal_reason.lower() or "익절" in signal_reason or pnl_percent >= 1.0:
+                                            # 익절 알림 (수익률 1% 이상도 익절로 처리)
+                                            take_profit_info = TakeProfitInfo(
+                                                symbol=symbol,
+                                                direction=direction,
+                                                entry_price=entry_price,
+                                                target_price=exit_price,
+                                                exit_price=exit_price,
+                                                quantity=position_size,
+                                                leverage=leverage,
+                                                pnl_usdt=pnl_usdt,
+                                                pnl_percent=pnl_percent,
+                                            )
+                                            await notifier.notify_take_profit(take_profit_info)
+                                            logger.info(f"📱 Telegram: Take profit notification sent for user {user_id}")
+
+                                        else:
+                                            # 일반 청산 알림 (TradeResult 사용)
+                                            trade_result = TradeResult(
+                                                symbol=symbol,
+                                                direction=direction,
+                                                entry_price=entry_price,
+                                                exit_price=exit_price,
+                                                quantity=position_size,
+                                                pnl_percent=pnl_percent,
+                                                pnl_usdt=pnl_usdt,
+                                                exit_reason=signal_reason,
+                                                duration_minutes=0.0,
+                                            )
+                                            await notifier.notify_close_trade(trade_result)
+                                            logger.info(f"📱 Telegram: Position close notification sent for user {user_id}")
+
+                                except Exception as e:
+                                    logger.warning(f"텔레그램 청산 알림 전송 실패: {e}")
+
+                                # 포지션 초기화 (텔레그램 알림 전송 후!)
                                 current_position = None
 
                                 await broadcast_to_user(
@@ -641,31 +739,14 @@ class BotRunner:
                                         "event": "position_closed",
                                         "symbol": symbol,
                                         "reason": signal_reason,
+                                        "pnl": round(pnl_usdt, 2),
+                                        "pnl_percent": round(pnl_percent, 2),
                                         "orderId": order_result.get("data", {}).get(
                                             "orderId", ""
                                         ),
                                     },
                                 )
                                 logger.info(f"Position closed for user {user_id}")
-
-                                # 📱 텔레그램 알림 전송 (청산)
-                                try:
-                                    notifier = get_telegram_notifier()
-                                    if notifier.is_enabled():
-                                        # 간단한 청산 알림 메시지 전송
-                                        close_message = f"""🔔 <b>포지션 청산</b>
-
-📈 심볼: {symbol}
-📍 청산가: ${price:,.2f}
-📝 사유: {signal_reason}
-
-⏰ 시간: {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")} UTC"""
-                                        await notifier.send_message(close_message)
-                                        logger.info(
-                                            f"📱 Telegram: Position close notification sent for user {user_id}"
-                                        )
-                                except Exception as e:
-                                    logger.warning(f"텔레그램 청산 알림 전송 실패: {e}")
 
                             except Exception as e:
                                 logger.error(
@@ -706,6 +787,24 @@ class BotRunner:
                                         "blocked_action": signal_action,
                                     },
                                 )
+
+                                # 📱 텔레그램 리스크 경고 알림
+                                try:
+                                    notifier = get_telegram_notifier()
+                                    if notifier.is_enabled():
+                                        risk_alert = RiskAlertInfo(
+                                            alert_type="daily_loss_limit",
+                                            message="일일 손실 한도 초과로 거래가 차단되었습니다.",
+                                            current_value=abs(today_pnl),
+                                            limit_value=daily_limit,
+                                            blocked_action=signal_action.upper(),
+                                            symbol=symbol,
+                                        )
+                                        await notifier.notify_risk_alert(risk_alert)
+                                        logger.info(f"📱 Telegram: Daily loss limit alert sent for user {user_id}")
+                                except Exception as e:
+                                    logger.warning(f"텔레그램 리스크 알림 전송 실패: {e}")
+
                                 # 거래를 건너뛰고 다음 시그널 대기
                                 continue
 
@@ -734,6 +833,24 @@ class BotRunner:
                                         "blocked_action": signal_action,
                                     },
                                 )
+
+                                # 📱 텔레그램 리스크 경고 알림
+                                try:
+                                    notifier = get_telegram_notifier()
+                                    if notifier.is_enabled():
+                                        risk_alert = RiskAlertInfo(
+                                            alert_type="max_positions",
+                                            message="최대 포지션 개수 도달로 거래가 차단되었습니다.",
+                                            current_value=float(current_positions),
+                                            limit_value=float(max_positions),
+                                            blocked_action=signal_action.upper(),
+                                            symbol=symbol,
+                                        )
+                                        await notifier.notify_risk_alert(risk_alert)
+                                        logger.info(f"📱 Telegram: Max positions alert sent for user {user_id}")
+                                except Exception as e:
+                                    logger.warning(f"텔레그램 리스크 알림 전송 실패: {e}")
+
                                 # 거래를 건너뛰고 다음 시그널 대기
                                 continue
 
@@ -805,7 +922,18 @@ class BotRunner:
                                     reduce_only=False,
                                 )
 
-                                # 포지션 추적 시작
+                                # 포지션 추적 시작 + 거래 기록 저장
+                                trade_id = await self._record_entry_trade(
+                                    session,
+                                    user_id,
+                                    symbol,
+                                    signal_action,
+                                    price,
+                                    signal_size,
+                                    allowed_leverage,
+                                    strategy.id,
+                                )
+
                                 current_position = {
                                     "side": "long"
                                     if signal_action == "buy"
@@ -813,18 +941,9 @@ class BotRunner:
                                     "entry_price": price,
                                     "size": signal_size,
                                     "symbol": symbol,
+                                    "trade_id": trade_id,  # 청산 시 업데이트를 위해 저장
+                                    "leverage": allowed_leverage,
                                 }
-
-                                # 거래 기록 저장
-                                await self._record_trade(
-                                    session,
-                                    user_id,
-                                    symbol,
-                                    signal_action,
-                                    price,
-                                    order_result,
-                                    strategy.id,
-                                )
 
                                 # WebSocket으로 프론트엔드에 알림
                                 await broadcast_to_user(
@@ -846,29 +965,33 @@ class BotRunner:
                                     f"Bitget order executed successfully for user {user_id}: {order_result}"
                                 )
 
-                                # 📱 텔레그램 알림 전송 (진입)
+                                # 📱 텔레그램 알림 전송 (체결)
                                 try:
                                     notifier = get_telegram_notifier()
                                     if notifier.is_enabled():
-                                        trade_info = TradeInfo(
+                                        total_value = price * signal_size * allowed_leverage
+                                        order_id = order_result.get("data", {}).get("orderId", "N/A")
+
+                                        # OrderFilledInfo로 상세 체결 알림
+                                        order_filled_info = OrderFilledInfo(
                                             symbol=symbol,
-                                            side="Long"
-                                            if signal_action == "buy"
-                                            else "Short",
-                                            entry_price=price,
+                                            direction="Long" if signal_action == "buy" else "Short",
+                                            order_type="시장가",
+                                            order_price=price,
+                                            filled_price=price,
                                             quantity=signal_size,
+                                            filled_quantity=signal_size,
                                             leverage=allowed_leverage,
-                                            stop_loss=signal_result.get("stop_loss"),
-                                            take_profit=signal_result.get(
-                                                "take_profit"
-                                            ),
+                                            total_value=total_value,
+                                            order_id=order_id,
+                                            status="완전 체결",
                                         )
-                                        await notifier.notify_new_trade(trade_info)
+                                        await notifier.notify_order_filled(order_filled_info)
                                         logger.info(
-                                            f"📱 Telegram: Trade entry notification sent for user {user_id}"
+                                            f"📱 Telegram: Order filled notification sent for user {user_id}"
                                         )
                                 except Exception as e:
-                                    logger.warning(f"텔레그램 진입 알림 전송 실패: {e}")
+                                    logger.warning(f"텔레그램 체결 알림 전송 실패: {e}")
 
                             except Exception as e:
                                 logger.error(
@@ -1008,29 +1131,77 @@ class BotRunner:
 
         return strategy
 
-    async def _record_trade(
+    async def _record_entry_trade(
         self,
         session: AsyncSession,
         user_id: int,
         symbol: str,
         side: str,
-        price: float,
-        res: dict,
+        entry_price: float,
+        qty: float,
+        leverage: int,
         strategy_id: int | None = None,
-    ):
+    ) -> int:
+        """
+        진입 시 거래 기록 생성 (청산 전 상태)
+
+        Returns:
+            trade_id: 생성된 거래 ID (청산 시 업데이트용)
+        """
         trade = Trade(
             user_id=user_id,
             symbol=symbol,
             side=side.upper(),
-            qty=0.001,
-            entry_price=Decimal(str(price)),
-            exit_price=Decimal(str(price)),
-            pnl=Decimal("0"),
-            pnl_percent=0.0,
+            qty=Decimal(str(qty)),
+            entry_price=Decimal(str(entry_price)),
+            exit_price=None,  # 아직 청산 안됨
+            pnl=None,  # 아직 계산 안됨
+            pnl_percent=None,
             strategy_id=strategy_id,
-            leverage=5,
-            exit_reason="signal_reverse",
+            leverage=leverage,
+            exit_reason=None,  # 아직 청산 안됨
         )
         session.add(trade)
         await session.commit()
         await session.refresh(trade)
+
+        logger.info(
+            f"📝 Trade entry recorded: ID={trade.id}, {symbol} {side.upper()} "
+            f"@ ${entry_price:.2f}, qty={qty}, leverage={leverage}x"
+        )
+        return trade.id
+
+    async def _update_trade_exit(
+        self,
+        session: AsyncSession,
+        trade_id: int,
+        exit_price: float,
+        pnl: float,
+        pnl_percent: float,
+        exit_reason: str,
+    ):
+        """
+        청산 시 거래 기록 업데이트
+        """
+        try:
+            result = await session.execute(
+                select(Trade).where(Trade.id == trade_id)
+            )
+            trade = result.scalars().first()
+
+            if trade:
+                trade.exit_price = Decimal(str(exit_price))
+                trade.pnl = Decimal(str(round(pnl, 8)))
+                trade.pnl_percent = round(pnl_percent, 2)
+                trade.exit_reason = exit_reason
+                await session.commit()
+
+                logger.info(
+                    f"📝 Trade exit updated: ID={trade_id}, "
+                    f"Exit @ ${exit_price:.2f}, PnL: ${pnl:.2f} ({pnl_percent:.2f}%)"
+                )
+            else:
+                logger.warning(f"Trade {trade_id} not found for exit update")
+
+        except Exception as e:
+            logger.error(f"Failed to update trade exit: {e}", exc_info=True)

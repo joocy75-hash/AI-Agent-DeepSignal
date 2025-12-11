@@ -12,6 +12,14 @@ from .types import (
     PositionInfo,
     WarningInfo,
     ErrorInfo,
+    # 상세 알림 타입
+    OrderInfo,
+    OrderFilledInfo,
+    StopLossInfo,
+    TakeProfitInfo,
+    PartialCloseInfo,
+    RiskAlertInfo,
+    SignalInfo,
 )
 
 __all__ = [
@@ -26,4 +34,12 @@ __all__ = [
     "PositionInfo",
     "WarningInfo",
     "ErrorInfo",
+    # 상세 알림 타입
+    "OrderInfo",
+    "OrderFilledInfo",
+    "StopLossInfo",
+    "TakeProfitInfo",
+    "PartialCloseInfo",
+    "RiskAlertInfo",
+    "SignalInfo",
 ]

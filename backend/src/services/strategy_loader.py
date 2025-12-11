@@ -1,10 +1,11 @@
 """
-전략 로더 - 3가지 대표 전략 로드
+전략 로더 - 대표 전략 로드
 
 지원하는 전략:
 1. proven_conservative - 보수적 EMA 크로스오버 전략
 2. proven_balanced - 균형적 RSI 다이버전스 전략
 3. proven_aggressive - 공격적 모멘텀 브레이크아웃 전략
+4. ai_role_division - AI 역할분담 전략 (빠른 진입 + 스마트 대응)
 """
 
 import json
@@ -67,12 +68,31 @@ def load_strategy_class(strategy_code: str, params_json: Optional[str] = None):
 
             return DynamicStrategyExecutor(strategy_code_str, params)
 
-        # 4. 동적 전략 코드 처리 (사용자 커스텀 전략)
-        elif strategy_code and len(strategy_code.strip()) > 100:
-            logger.info(f"Loading dynamic strategy code (length: {len(strategy_code)})")
-            from ..strategies.dynamic_strategy_executor import DynamicStrategyExecutor
+        # 4. AI 역할분담 전략 (빠른 진입 + 스마트 대응)
+        elif strategy_code == "ai_role_division":
+            logger.info("Loading AI Role Division Strategy (Fast Entry + Smart Management)")
+            from ..strategies.ai_role_division_strategy import generate_signal
 
-            return DynamicStrategyExecutor(strategy_code, params)
+            class AIRoleDivisionStrategy:
+                def __init__(self, params):
+                    self.params = params
+
+                def generate_signal(self, current_price, candles, current_position=None):
+                    return generate_signal(candles, self.params, current_position)
+
+            return AIRoleDivisionStrategy(params)
+
+        # 5. 동적 전략 코드 처리 - 보안상 비활성화
+        # SECURITY: exec()를 사용한 임의 코드 실행은 심각한 보안 취약점입니다.
+        # 사용자 커스텀 전략은 반드시 사전 정의된 전략 파일로 등록해야 합니다.
+        elif strategy_code and len(strategy_code.strip()) > 100:
+            logger.warning(
+                f"[SECURITY] Dynamic strategy code execution is DISABLED for security reasons. "
+                f"Code length: {len(strategy_code)}. "
+                f"Please register custom strategies as pre-defined strategy files."
+            )
+            # 임의 코드 실행 차단 - 기본 전략으로 폴백
+            return None
 
         # 5. 기타 - 기본 전략 엔진 사용
         else:

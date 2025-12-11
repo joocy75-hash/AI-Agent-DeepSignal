@@ -17,6 +17,7 @@ import { useStrategies } from '../context/StrategyContext';
 import TradingChart from '../components/TradingChart';
 import BalanceCard from '../components/BalanceCard';
 import PositionList from '../components/PositionList';
+import BotLogViewer from '../components/BotLogViewer';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -344,36 +345,54 @@ export default function Trading() {
                         }
                     >
                         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                            {/* Bot Status */}
+                            {/* Bot Status with Inline Logs */}
                             <div style={{
-                                padding: '20px',
+                                padding: isRunning ? '12px 16px 0 16px' : '12px 16px',
                                 background: isRunning
                                     ? 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)'
                                     : '#f5f5f7',
-                                borderRadius: 12,
-                                textAlign: 'center',
+                                borderRadius: 8,
                                 border: isRunning ? '1px solid #b7eb8f' : '1px solid #e5e5e5'
                             }}>
+                                {/* Header with status indicator */}
                                 <div style={{
-                                    width: 48,
-                                    height: 48,
-                                    margin: '0 auto 12px',
-                                    borderRadius: '50%',
-                                    background: isRunning ? '#52c41a' : '#d9d9d9',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: isRunning ? '0 0 20px rgba(82, 196, 26, 0.4)' : 'none'
+                                    justifyContent: 'space-between',
+                                    marginBottom: isRunning ? 12 : 0
                                 }}>
-                                    {isRunning ? (
-                                        <PauseCircleOutlined style={{ fontSize: 24, color: '#fff' }} />
-                                    ) : (
-                                        <PlayCircleOutlined style={{ fontSize: 24, color: '#fff' }} />
-                                    )}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <div style={{
+                                            width: 32,
+                                            height: 32,
+                                            borderRadius: '50%',
+                                            background: isRunning ? '#52c41a' : '#d9d9d9',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: isRunning ? '0 0 12px rgba(82, 196, 26, 0.4)' : 'none'
+                                        }}>
+                                            {isRunning ? (
+                                                <PauseCircleOutlined style={{ fontSize: 16, color: '#fff' }} />
+                                            ) : (
+                                                <PlayCircleOutlined style={{ fontSize: 16, color: '#fff' }} />
+                                            )}
+                                        </div>
+                                        <Text strong style={{ fontSize: 14, color: isRunning ? '#389e0d' : '#8c8c8c' }}>
+                                            {isRunning ? 'AI Bot 실행 중' : 'AI Bot 대기 중'}
+                                        </Text>
+                                    </div>
                                 </div>
-                                <Text strong style={{ fontSize: 16, color: isRunning ? '#389e0d' : '#8c8c8c' }}>
-                                    {isRunning ? 'AI Bot 실행 중' : 'AI Bot 대기 중'}
-                                </Text>
+
+                                {/* Inline Real-time Logs - Only when running */}
+                                {isRunning && (
+                                    <BotLogViewer
+                                        height={200}
+                                        maxLogs={50}
+                                        compact={true}
+                                        showHeader={false}
+                                    />
+                                )}
                             </div>
 
                             {/* Strategy Selection */}
@@ -518,11 +537,33 @@ export default function Trading() {
                             <div style={{ marginTop: 12 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Text type="secondary">위험도</Text>
-                                    <Tag color={selectedStrategyObj.risk_level === 'high' ? 'red' : selectedStrategyObj.risk_level === 'medium' ? 'orange' : 'green'}>
-                                        {selectedStrategyObj.risk_level === 'high' ? '고위험' : selectedStrategyObj.risk_level === 'medium' ? '중위험' : '저위험'}
+                                    <Tag color={
+                                        selectedStrategyObj.risk_level?.includes('high') ? 'red' :
+                                        selectedStrategyObj.risk_level?.includes('medium') ? 'orange' : 'green'
+                                    }>
+                                        {selectedStrategyObj.risk_level?.includes('high') ? '고위험' :
+                                         selectedStrategyObj.risk_level?.includes('medium') ? '중위험' : '저위험'}
                                     </Tag>
                                 </div>
                             </div>
+
+                            {/* 손절/익절 정보 */}
+                            {(selectedStrategyObj.stop_loss || selectedStrategyObj.take_profit) && (
+                                <div style={{ marginTop: 8 }}>
+                                    <Space size="large">
+                                        {selectedStrategyObj.stop_loss && (
+                                            <Text type="secondary">
+                                                손절: <Text strong style={{ color: '#ff4d4f' }}>-{selectedStrategyObj.stop_loss}%</Text>
+                                            </Text>
+                                        )}
+                                        {selectedStrategyObj.take_profit && (
+                                            <Text type="secondary">
+                                                익절: <Text strong style={{ color: '#52c41a' }}>+{selectedStrategyObj.take_profit}%</Text>
+                                            </Text>
+                                        )}
+                                    </Space>
+                                </div>
+                            )}
 
                             {/* Warning */}
                             <div style={{

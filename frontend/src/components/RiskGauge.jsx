@@ -26,8 +26,9 @@ function RiskGauge() {
       const data = await analyticsAPI.getRiskMetrics();
       console.log('[RiskGauge] Risk metrics loaded:', data);
 
+      // 백엔드 필드명과 매핑 (max_drawdown -> mdd)
       const metrics = {
-        mdd: data.mdd ?? 0,
+        mdd: data.max_drawdown ?? data.mdd ?? 0,
         sharpe_ratio: data.sharpe_ratio ?? 0,
         win_rate: data.win_rate ?? 0,
         max_mdd_limit: data.max_mdd_limit ?? -25.0,

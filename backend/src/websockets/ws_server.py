@@ -557,6 +557,19 @@ async def user_socket(websocket: WebSocket, user_id: int, token: str = Query(...
                 conn_state.last_pong = datetime.utcnow()
                 logger.debug(f"Received pong from user {user_id}")
 
+            elif action == "get_recent_logs":
+                # 최근 로그 요청
+                from ..utils.log_broadcaster import get_recent_logs
+                limit = data.get("limit", 100)
+                logs = get_recent_logs(user_id, limit)
+                await websocket.send_json(
+                    {
+                        "type": "recent_logs",
+                        "logs": logs,
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    }
+                )
+
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for user {user_id}")
     except Exception as e:

@@ -183,11 +183,12 @@ async def get_risk_metrics(
             "Risk metrics calculation requested",
             user_id=user_id,
         )
-        # 거래 통계 조회
+        # 거래 통계 조회 (청산 완료된 거래만)
         result = await session.execute(
             select(Trade).where(
                 Trade.user_id == user_id,
                 Trade.exit_price.isnot(None),  # 청산된 거래만
+                Trade.pnl.isnot(None),  # PnL이 계산된 거래만
             )
         )
         trades = result.scalars().all()
@@ -402,12 +403,13 @@ async def get_performance_metrics(
         days = period_map[period]
         cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-        # 거래 조회
+        # 거래 조회 (청산 완료된 거래만)
         result = await session.execute(
             select(Trade).where(
                 Trade.user_id == user_id,
                 Trade.created_at >= cutoff_date,
-                Trade.exit_price.isnot(None),
+                Trade.exit_price.isnot(None),  # 청산된 거래만
+                Trade.pnl.isnot(None),  # PnL이 계산된 거래만
             )
         )
         trades = result.scalars().all()

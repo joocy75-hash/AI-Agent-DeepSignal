@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Spin } from 'antd';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { WebSocketProvider } from './context/WebSocketContext';
@@ -7,16 +9,31 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ConnectionStatus from './components/ConnectionStatus';
 import TradingNotification from './components/TradingNotification';
 import MainLayout from './components/layout/MainLayout';
-import Login from './pages/Login';
-import OAuthCallback from './pages/OAuthCallback';
-import Dashboard from './pages/Dashboard';
-import Strategy from './pages/Strategy';
-import Trading from './pages/Trading';
-import TradingHistory from './pages/TradingHistory';
-import Settings from './pages/Settings';
-import Alerts from './pages/Alerts';
-import Notifications from './pages/Notifications';
-import BacktestingPage from './pages/BacktestingPage';
+
+// Lazy load pages for better initial load performance
+const Login = lazy(() => import('./pages/Login'));
+const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Strategy = lazy(() => import('./pages/Strategy'));
+const Trading = lazy(() => import('./pages/Trading'));
+const TradingHistory = lazy(() => import('./pages/TradingHistory'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Alerts = lazy(() => import('./pages/Alerts'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const BacktestingPage = lazy(() => import('./pages/BacktestingPage'));
+
+// Loading spinner component
+const PageLoader = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    background: '#f5f5f7'
+  }}>
+    <Spin size="large" tip="로딩 중..." />
+  </div>
+);
 
 // Protected Route Component (for regular users)
 function ProtectedRoute({ children }) {
@@ -38,6 +55,7 @@ function App() {
           <WebSocketProvider>
             <StrategyProvider>
               <Router>
+                <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Login />} />
                   <Route path="/login" element={<Login />} />
@@ -108,6 +126,7 @@ function App() {
                     }
                   />
                 </Routes>
+                </Suspense>
               </Router>
               <ConnectionStatus />
               <TradingNotification />

@@ -22,6 +22,13 @@ from .types import (
     BalanceInfo,
     DailyStats,
     PerformanceStats,
+    OrderInfo,
+    OrderFilledInfo,
+    StopLossInfo,
+    TakeProfitInfo,
+    PartialCloseInfo,
+    RiskAlertInfo,
+    SignalInfo,
 )
 
 logger = logging.getLogger(__name__)
@@ -304,6 +311,83 @@ class TelegramNotifier:
         """수익 요약 전송"""
         message = TelegramMessages.profit_summary(
             today_pnl, week_pnl, month_pnl, total_pnl
+        )
+        return await self.send_message(message)
+
+    # ==================== 확장된 거래 알림 메서드 ====================
+
+    async def notify_limit_order(self, order: OrderInfo) -> bool:
+        """지정가 주문 등록 알림"""
+        if not self.notify_trades:
+            return False
+        message = TelegramMessages.limit_order_placed(order)
+        return await self.send_message(message)
+
+    async def notify_order_filled(self, order: OrderFilledInfo) -> bool:
+        """주문 체결 알림"""
+        if not self.notify_trades:
+            return False
+        message = TelegramMessages.order_filled(order)
+        return await self.send_message(message)
+
+    async def notify_stop_loss(self, info: StopLossInfo) -> bool:
+        """손절 알림"""
+        if not self.notify_trades:
+            return False
+        message = TelegramMessages.stop_loss_triggered(info)
+        return await self.send_message(message)
+
+    async def notify_take_profit(self, info: TakeProfitInfo) -> bool:
+        """익절 알림"""
+        if not self.notify_trades:
+            return False
+        message = TelegramMessages.take_profit_triggered(info)
+        return await self.send_message(message)
+
+    async def notify_partial_close(self, info: PartialCloseInfo) -> bool:
+        """부분 청산 알림"""
+        if not self.notify_trades:
+            return False
+        message = TelegramMessages.partial_close(info)
+        return await self.send_message(message)
+
+    async def notify_risk_alert(self, info: RiskAlertInfo) -> bool:
+        """리스크 경고 알림"""
+        if not self.notify_system:
+            return False
+        message = TelegramMessages.risk_alert(info)
+        return await self.send_message(message)
+
+    async def notify_signal(self, info: SignalInfo) -> bool:
+        """전략 시그널 알림"""
+        if not self.notify_trades:
+            return False
+        message = TelegramMessages.signal_detected(info)
+        return await self.send_message(message)
+
+    async def notify_position_update(
+        self,
+        symbol: str,
+        direction: str,
+        entry_price: float,
+        current_price: float,
+        quantity: float,
+        leverage: int,
+        unrealized_pnl: float,
+        unrealized_pnl_percent: float,
+    ) -> bool:
+        """포지션 업데이트 알림"""
+        if not self.notify_trades:
+            return False
+        message = TelegramMessages.position_update(
+            symbol,
+            direction,
+            entry_price,
+            current_price,
+            quantity,
+            leverage,
+            unrealized_pnl,
+            unrealized_pnl_percent,
         )
         return await self.send_message(message)
 

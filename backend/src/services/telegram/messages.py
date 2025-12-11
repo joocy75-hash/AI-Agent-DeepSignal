@@ -16,6 +16,13 @@ from .types import (
     BalanceInfo,
     DailyStats,
     PerformanceStats,
+    OrderInfo,
+    OrderFilledInfo,
+    StopLossInfo,
+    TakeProfitInfo,
+    PartialCloseInfo,
+    RiskAlertInfo,
+    SignalInfo,
 )
 
 
@@ -367,6 +374,231 @@ class TelegramMessages:
 • 이번 주: {format_pnl(week_pnl)}
 • 이번 달: {format_pnl(month_pnl)}
 • 전체: {format_pnl(total_pnl)}
+
+⏰ {cls._format_timestamp()}"""
+        return msg
+
+    # ==================== 확장된 알림 메시지 ====================
+
+    @classmethod
+    def limit_order_placed(cls, order: OrderInfo) -> str:
+        """지정가 주문 등록 알림"""
+        direction_emoji = "📈" if order.direction == "Long" else "📉"
+        order_type_text = {
+            "limit": "지정가",
+            "stop_limit": "스탑 지정가",
+            "stop_market": "스탑 시장가",
+            "market": "시장가",
+        }.get(order.order_type, order.order_type)
+
+        msg = f"""📝 <b>주문 등록</b>
+
+• 코인: {order.symbol}
+• 주문유형: {order_type_text}
+• 방향: {order.direction} {direction_emoji}
+• 주문가: ${order.price:,.2f}
+• 수량: {order.quantity}
+• 레버리지: {order.leverage}x"""
+
+        if order.order_id:
+            msg += f"\n• 주문ID: {order.order_id[:12]}..."
+
+        msg += f"\n\n⏰ {cls._format_timestamp(order.timestamp)}"
+        return msg
+
+    @classmethod
+    def order_filled(cls, order: OrderFilledInfo) -> str:
+        """주문 체결 알림"""
+        direction_emoji = "📈" if order.direction == "Long" else "📉"
+        slippage_text = ""
+        if abs(order.slippage_percent) > 0.01:
+            slippage_emoji = "⚠️" if order.slippage_percent > 0.1 else ""
+            slippage_text = f"\n• 슬리피지: {slippage_emoji}{order.slippage_percent:.3f}%"
+
+        msg = f"""✅ <b>주문 체결</b>
+
+• 코인: {order.symbol}
+• 방향: {order.direction} {direction_emoji}
+• 주문가: ${order.order_price:,.2f}
+• 체결가: ${order.filled_price:,.2f}{slippage_text}
+• 수량: {order.quantity}
+• 레버리지: {order.leverage}x
+
+⏰ {cls._format_timestamp(order.timestamp)}"""
+        return msg
+
+    @classmethod
+    def stop_loss_triggered(cls, info: StopLossInfo) -> str:
+        """손절 알림"""
+        direction_emoji = "📈" if info.direction == "Long" else "📉"
+        duration_text = cls._format_duration(info.duration_minutes)
+
+        msg = f"""🛑 <b>손절 체결</b>
+
+{direction_emoji} {info.symbol} {info.direction}
+━━━━━━━━━━━━━━━━━━━━━
+• 진입가: ${info.entry_price:,.2f}
+• 손절가: ${info.stop_price:,.2f}
+• 체결가: ${info.exit_price:,.2f}
+• 수량: {info.quantity}
+• 레버리지: {info.leverage}x
+
+🔴 <b>손익: {info.pnl_usdt:,.2f} USDT ({info.pnl_percent:.2f}%)</b>
+• 보유기간: {duration_text}
+
+⏰ {cls._format_timestamp(info.timestamp)}"""
+        return msg
+
+    @classmethod
+    def take_profit_triggered(cls, info: TakeProfitInfo) -> str:
+        """익절 알림"""
+        direction_emoji = "📈" if info.direction == "Long" else "📉"
+        duration_text = cls._format_duration(info.duration_minutes)
+
+        msg = f"""🎯 <b>익절 체결</b>
+
+{direction_emoji} {info.symbol} {info.direction}
+━━━━━━━━━━━━━━━━━━━━━
+• 진입가: ${info.entry_price:,.2f}
+• 목표가: ${info.target_price:,.2f}
+• 체결가: ${info.exit_price:,.2f}
+• 수량: {info.quantity}
+• 레버리지: {info.leverage}x
+
+🟢 <b>손익: +{info.pnl_usdt:,.2f} USDT (+{info.pnl_percent:.2f}%)</b>
+• 보유기간: {duration_text}
+
+⏰ {cls._format_timestamp(info.timestamp)}"""
+        return msg
+
+    @classmethod
+    def partial_close(cls, info: PartialCloseInfo) -> str:
+        """부분 청산 알림"""
+        direction_emoji = "📈" if info.direction == "Long" else "📉"
+        pnl_emoji = "🟢" if info.pnl_usdt >= 0 else "🔴"
+        pnl_sign = "+" if info.pnl_usdt >= 0 else ""
+
+        reason_text = {
+            "partial_tp": "부분 익절",
+            "reduce_risk": "리스크 축소",
+            "signal": "시그널",
+        }.get(info.close_reason, info.close_reason)
+
+        msg = f"""📊 <b>부분 청산</b>
+
+{direction_emoji} {info.symbol} {info.direction}
+━━━━━━━━━━━━━━━━━━━━━
+• 진입가: ${info.entry_price:,.2f}
+• 청산가: ${info.exit_price:,.2f}
+• 청산수량: {info.closed_quantity}
+• 잔여수량: {info.remaining_quantity}
+• 청산사유: {reason_text}
+
+{pnl_emoji} <b>손익: {pnl_sign}{info.pnl_usdt:,.2f} USDT ({pnl_sign}{info.pnl_percent:.2f}%)</b>
+
+⏰ {cls._format_timestamp(info.timestamp)}"""
+        return msg
+
+    @classmethod
+    def risk_alert(cls, info: RiskAlertInfo) -> str:
+        """리스크 경고 알림"""
+        alert_emoji = {
+            "daily_loss_limit": "🚫",
+            "max_positions": "📊",
+            "high_leverage": "⚡",
+            "large_position": "💰",
+            "high_drawdown": "📉",
+            "margin_call": "🚨",
+        }.get(info.alert_type, "⚠️")
+
+        alert_title = {
+            "daily_loss_limit": "일일 손실 한도",
+            "max_positions": "최대 포지션 도달",
+            "high_leverage": "고레버리지 경고",
+            "large_position": "대형 포지션 경고",
+            "high_drawdown": "높은 낙폭 경고",
+            "margin_call": "마진콜 경고",
+        }.get(info.alert_type, "리스크 경고")
+
+        action_text = ""
+        if info.action_taken:
+            action_map = {
+                "blocked": "❌ 거래가 차단되었습니다",
+                "reduced": "⚡ 포지션이 축소되었습니다",
+                "warning_only": "⚠️ 경고만 표시됩니다",
+            }
+            action_text = f"\n\n{action_map.get(info.action_taken, info.action_taken)}"
+
+        msg = f"""{alert_emoji} <b>{alert_title}</b>
+
+{info.message}
+
+━━━━━━━━━━━━━━━━━━━━━
+• 현재값: {info.current_value:.2f}
+• 한도값: {info.limit_value:.2f}{action_text}
+
+⏰ {cls._format_timestamp(info.timestamp)}"""
+        return msg
+
+    @classmethod
+    def signal_detected(cls, info: SignalInfo) -> str:
+        """전략 시그널 감지 알림"""
+        signal_emoji = {
+            "buy": "🟢",
+            "sell": "🔴",
+            "close": "⏹️",
+            "hold": "⏸️",
+        }.get(info.signal_type, "📊")
+
+        signal_text = {
+            "buy": "매수 (Long)",
+            "sell": "매도 (Short)",
+            "close": "청산",
+            "hold": "대기",
+        }.get(info.signal_type, info.signal_type)
+
+        confidence_bar = "█" * int(info.confidence * 10) + "░" * (10 - int(info.confidence * 10))
+
+        msg = f"""{signal_emoji} <b>시그널 감지</b>
+
+• 코인: {info.symbol}
+• 시그널: {signal_text}
+• 현재가: ${info.current_price:,.2f}
+• 전략: {info.strategy_name}
+
+<b>신뢰도:</b> [{confidence_bar}] {info.confidence*100:.0f}%
+<b>사유:</b> {info.reason}
+
+⏰ {cls._format_timestamp(info.timestamp)}"""
+        return msg
+
+    @classmethod
+    def position_update(
+        cls,
+        symbol: str,
+        direction: str,
+        entry_price: float,
+        current_price: float,
+        quantity: float,
+        leverage: int,
+        unrealized_pnl: float,
+        unrealized_pnl_percent: float,
+    ) -> str:
+        """포지션 업데이트 알림"""
+        direction_emoji = "📈" if direction == "Long" else "📉"
+        pnl_emoji = "🟢" if unrealized_pnl >= 0 else "🔴"
+        pnl_sign = "+" if unrealized_pnl >= 0 else ""
+
+        msg = f"""📊 <b>포지션 현황</b>
+
+{direction_emoji} {symbol} {direction}
+━━━━━━━━━━━━━━━━━━━━━
+• 진입가: ${entry_price:,.2f}
+• 현재가: ${current_price:,.2f}
+• 수량: {quantity}
+• 레버리지: {leverage}x
+
+{pnl_emoji} <b>미실현 손익: {pnl_sign}${unrealized_pnl:,.2f} ({pnl_sign}{unrealized_pnl_percent:.2f}%)</b>
 
 ⏰ {cls._format_timestamp()}"""
         return msg

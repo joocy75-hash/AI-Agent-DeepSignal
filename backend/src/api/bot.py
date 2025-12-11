@@ -8,7 +8,6 @@ from ..database.db import get_session
 from ..database.models import BotStatus
 from ..schemas.bot_schema import BotStartRequest, BotStatusResponse
 from ..services.trade_executor import InvalidApiKeyError, ensure_client
-from ..services.signal_tracker import SignalTracker
 from ..services.telegram import get_telegram_notifier
 from ..services.telegram.types import BotConfig, PositionInfo
 from ..workers.manager import BotManager
@@ -391,14 +390,14 @@ async def bot_status(
     session: AsyncSession = Depends(get_session),
     user_id: int = Depends(get_current_user_id),
 ):
-    """봇 상태 조회 (강화 버전 - JWT 인증 필요)"""
+    """봇 상태 조회 (강화 버전 - JWT 인증 필요) - 성능 최적화됨"""
     from datetime import datetime
     from ..services.bot_runner import BotRunner
     from ..workers.manager import BotManager
     from ..services.exchange_service import ExchangeService
     from ..utils.cache_manager import cache_manager, make_cache_key
 
-    # 캐시 확인 (30초 TTL)
+    # 캐시 확인 (10초 TTL - 빠른 응답 위해)
     cache_key = make_cache_key("bot_status", user_id)
     cached_status = await cache_manager.get(cache_key)
     if cached_status is not None:
@@ -417,37 +416,25 @@ async def bot_status(
         is_actually_running = manager.runner.is_running(user_id)
 
         # 데이터베이스와 실제 상태가 다른 경우 처리
+        # 중요: 실제 상태(is_actually_running)를 신뢰하고 DB를 동기화
         if status and status.is_running != is_actually_running:
-            if status.is_running and not is_actually_running:
-                # DB에는 실행 중으로 표시되어 있지만 메모리에서 실행 되지 않음
-                # → 봇을 자동으로 재시작 시도 (새로고침 시 상태 유지)
-                logger.warning(
-                    f"Bot status mismatch for user {user_id}: DB=True, Actual=False. "
-                    f"Attempting to restart bot..."
-                )
-                try:
-                    await manager.start_bot(user_id)
-                    is_actually_running = True
-                    logger.info(f"Bot auto-restarted for user {user_id}")
-                except Exception as e:
-                    # 재시작 실패 시에만 DB 상태를 False로 업데이트
-                    logger.error(f"Failed to auto-restart bot for user {user_id}: {e}")
-                    status.is_running = False
-                    await session.commit()
-                    is_actually_running = False
-            else:
-                # DB=False, Actual=True인 경우 (드문 경우) → DB를 True로 업데이트
-                logger.warning(
-                    f"Bot status mismatch for user {user_id}: DB=False, Actual=True. "
-                    f"Updating DB to match."
-                )
-                status.is_running = True
-                await session.commit()
+            logger.warning(
+                f"Bot status mismatch for user {user_id}: DB={status.is_running}, Actual={is_actually_running}. "
+                f"Syncing DB to actual state."
+            )
+            # DB를 실제 상태에 맞게 업데이트 (자동 재시작 하지 않음!)
+            status.is_running = is_actually_running
+            await session.commit()
 
+            # 캐시 무효화
+            from ..utils.cache_manager import cache_manager, make_cache_key
+            await cache_manager.delete(make_cache_key("bot_status", user_id))
+
+        # 실제 상태를 기준으로 반환
         is_running = is_actually_running
         strategy_id = status.strategy_id if status else None
 
-        # 전략 정보 조회
+        # 전략 정보 조회 (DB 조회만, 빠름)
         strategy_info = None
         if strategy_id:
             from ..database.models import Strategy
@@ -457,10 +444,8 @@ async def bot_status(
             )
             strategy = strategy_result.scalars().first()
             if strategy:
-                # 최근 시그널 조회
-                latest_signal = await SignalTracker.get_latest_signal(
-                    session=session, user_id=user_id
-                )
+                # 최근 시그널 조회는 스킵 (성능 개선)
+                latest_signal = None
 
                 strategy_info = {
                     "name": strategy.name,
@@ -473,37 +458,53 @@ async def bot_status(
                     ),
                 }
 
-        # 거래소 연결 상태 및 잔고 조회
+        # 거래소 연결 상태 및 잔고 조회 (캐싱 적용)
         connection_status = "DISCONNECTED"
         balance_info = None
         last_data_received = None
 
-        try:
-            client, exchange_name = await ExchangeService.get_user_exchange_client(
-                session, user_id
-            )
+        # 잔고 캐시 확인 (별도 캐시, 60초 TTL)
+        balance_cache_key = make_cache_key("balance", user_id)
+        cached_balance = await cache_manager.get(balance_cache_key)
 
-            # 잔고 조회로 연결 상태 확인
-            balance = await client.fetch_balance()
+        if cached_balance is not None:
+            # 캐시된 잔고 사용
+            logger.debug(f"Cache hit for balance user {user_id}")
             connection_status = "CONNECTED"
-            last_data_received = datetime.utcnow()
+            balance_info = cached_balance
+            last_data_received = datetime.fromisoformat(cached_balance["updatedAt"].replace("Z", ""))
+        else:
+            # 캐시 미스: API 호출
+            try:
+                client, exchange_name = await ExchangeService.get_user_exchange_client(
+                    session, user_id
+                )
 
-            # USDT 잔고 정보
-            usdt_balance = balance.get("USDT", {})
-            total = float(usdt_balance.get("total", 0))
-            free = float(usdt_balance.get("free", 0))
-            used = float(usdt_balance.get("used", 0))
+                # 잔고 조회로 연결 상태 확인
+                balance = await client.fetch_balance()
+                connection_status = "CONNECTED"
+                last_data_received = datetime.utcnow()
 
-            balance_info = {
-                "total": total,
-                "free": free,
-                "used": used,
-                "updatedAt": last_data_received.isoformat() + "Z",
-            }
+                # USDT 잔고 정보
+                usdt_balance = balance.get("USDT", {})
+                total = float(usdt_balance.get("total", 0))
+                free = float(usdt_balance.get("free", 0))
+                used = float(usdt_balance.get("used", 0))
 
-        except Exception as e:
-            logger.warning(f"[bot_status] Failed to fetch balance: {e}")
-            connection_status = "DISCONNECTED"
+                balance_info = {
+                    "total": total,
+                    "free": free,
+                    "used": used,
+                    "updatedAt": last_data_received.isoformat() + "Z",
+                }
+
+                # 잔고 캐시 저장 (60초 TTL)
+                await cache_manager.set(balance_cache_key, balance_info, ttl=60)
+                logger.debug(f"Cached balance for user {user_id}")
+
+            except Exception as e:
+                logger.warning(f"[bot_status] Failed to fetch balance: {e}")
+                connection_status = "DISCONNECTED"
 
         # 응답 구성 (하위 호환성을 위해 is_running, strategy_id 필드 추가)
         response = {
