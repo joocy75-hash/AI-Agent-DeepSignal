@@ -15,6 +15,7 @@ import {
     FundOutlined,
     MenuOutlined,
     CloseOutlined,
+    RobotOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../NotificationBell';
@@ -67,6 +68,11 @@ export default function MainLayout({ children }) {
             key: '/strategy',
             icon: <RocketOutlined />,
             label: '전략 관리',
+        },
+        {
+            key: '/bots',
+            icon: <RobotOutlined />,
+            label: '봇 관리',
         },
         {
             key: '/backtesting',

@@ -22,9 +22,12 @@ from .api import (
     admin_bots,
     admin_analytics,
     admin_logs,
+    annotations,  # 차트 어노테이션 API (NEW)
     auth,
     oauth,
     bot,
+    bot_instances,  # 다중 봇 시스템 API (NEW)
+    grid_bot,  # 그리드 봇 API (NEW)
     strategy,
     account,
     order,
@@ -59,6 +62,18 @@ from .config import RateLimitConfig
 
 
 def create_app() -> FastAPI:
+    # 🔒 보안 검증: JWT_SECRET 필수 확인
+    if not settings.jwt_secret or settings.jwt_secret == "change_me":
+        if not RateLimitConfig.IS_DEVELOPMENT:
+            raise RuntimeError(
+                "❌ CRITICAL: JWT_SECRET must be set in production! "
+                "Set JWT_SECRET environment variable with a secure random string (at least 32 characters)."
+            )
+        else:
+            logging.warning(
+                "⚠️ WARNING: JWT_SECRET is not set. Using insecure default for development only!"
+            )
+
     market_queue: asyncio.Queue = asyncio.Queue()
     bot_manager = BotManager(market_queue, db.AsyncSessionLocal)
 
@@ -104,6 +119,10 @@ def create_app() -> FastAPI:
             {"name": "account", "description": "계정 정보, 잔고, 포지션 조회"},
             {"name": "order", "description": "거래 내역 및 주문 관리"},
             {"name": "bot", "description": "자동 거래 봇 제어"},
+            {
+                "name": "Grid Bot",
+                "description": "그리드 트레이딩 봇 (가격 범위 자동 매매)",
+            },
             {"name": "strategy", "description": "트레이딩 전략 관리"},
             {"name": "ai_strategy", "description": "AI 기반 전략 생성 (DeepSeek)"},
             {"name": "backtest", "description": "백테스트 실행 및 결과 조회"},
@@ -120,35 +139,55 @@ def create_app() -> FastAPI:
     app.state.market_queue = market_queue
     app.state.bot_manager = bot_manager
 
-    # CORS 설정 - 보안을 위해 특정 도메인만 허용
-    # 개발 환경: localhost
-    # 프로덕션 환경: 실제 프론트엔드 도메인으로 변경 필요
-    allowed_origins = [
-        "http://localhost:3000",  # React 개발 서버 (User Frontend)
-        "http://localhost:3001",  # Vite 개발 서버 (port 3001)
-        "http://localhost:3002",  # Vite 개발 서버 (port 3002)
-        "http://localhost:3003",  # Vite 개발 서버 (port 3003)
-        "http://localhost:4000",  # Admin Frontend (관리자 대시보드)
-        "http://localhost:5173",  # Vite 개발 서버 (default)
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:3002",
-        "http://127.0.0.1:3003",
-        "http://127.0.0.1:4000",
-        "http://127.0.0.1:5173",
-        # Production servers
-        "http://158.247.245.197:3000",  # Production Frontend
-        "http://158.247.245.197:4000",  # Production Admin Frontend
-        "http://158.247.245.197",       # Production (without port)
-    ]
+    # ============================================================
+    # 🔒 CORS 설정 - 환경별 보안 강화
+    # ============================================================
+    # 개발 환경: localhost 허용
+    # 프로덕션 환경: CORS_ORIGINS 환경변수로만 허용 도메인 설정
+    # ============================================================
 
-    # 환경 변수로 추가 도메인 설정 가능
+    if RateLimitConfig.IS_DEVELOPMENT:
+        # 개발 환경: localhost 변형들 허용
+        allowed_origins = [
+            "http://localhost:3000",  # React 개발 서버
+            "http://localhost:3001",  # Vite (port 3001)
+            "http://localhost:3002",  # Vite (port 3002)
+            "http://localhost:3003",  # Vite (port 3003)
+            "http://localhost:4000",  # Admin Frontend
+            "http://localhost:5173",  # Vite default
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+            "http://127.0.0.1:3002",
+            "http://127.0.0.1:3003",
+            "http://127.0.0.1:4000",
+            "http://127.0.0.1:5173",
+        ]
+        logging.info("🔧 CORS: Development mode - localhost origins allowed")
+    else:
+        # 프로덕션 환경: 환경변수로만 허용 도메인 설정 (하드코딩 제거)
+        allowed_origins = []
+        logging.info("🔒 CORS: Production mode - only CORS_ORIGINS env var allowed")
+
+    # 환경 변수로 추가 도메인 설정 (개발/프로덕션 모두)
+    # CORS_ORIGINS 환경변수: 쉼표로 구분된 도메인 목록
+    # 예: "https://example.com,https://admin.example.com"
     if settings.cors_origins:
-        # CORS_ORIGINS 환경 변수: 쉼표로 구분된 도메인 목록
         additional_origins = [
-            origin.strip() for origin in settings.cors_origins.split(",")
+            origin.strip()
+            for origin in settings.cors_origins.split(",")
+            if origin.strip()  # 빈 문자열 제외
         ]
         allowed_origins.extend(additional_origins)
+        logging.info(
+            f"🔒 CORS: Added {len(additional_origins)} origins from CORS_ORIGINS env"
+        )
+
+    # 프로덕션에서 CORS_ORIGINS가 설정되지 않은 경우 경고
+    if not RateLimitConfig.IS_DEVELOPMENT and not allowed_origins:
+        logging.warning(
+            "⚠️ CORS: No origins configured in production! "
+            "Set CORS_ORIGINS environment variable (comma-separated domains)"
+        )
 
     app.add_middleware(
         CORSMiddleware,
@@ -178,6 +217,8 @@ def create_app() -> FastAPI:
     app.include_router(oauth.router)  # OAuth (Google, Kakao)
     app.include_router(two_factor.router)  # 2FA (NEW)
     app.include_router(bot.router)
+    app.include_router(bot_instances.router)  # 다중 봇 시스템 API (NEW)
+    app.include_router(grid_bot.router)  # 그리드 봇 API (NEW)
     app.include_router(admin_diagnostics.router)
     app.include_router(admin_monitoring.router)
     app.include_router(admin_users.router)
@@ -186,6 +227,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_logs.router)  # Admin logs (NEW)
     app.include_router(strategy.router)
     app.include_router(chart.router)
+    app.include_router(annotations.router)  # Chart Annotations API (NEW)
     app.include_router(order.router)
     app.include_router(account.router)
     app.include_router(backtest.router)

@@ -2,15 +2,116 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from typing import Optional, Tuple
+import logging
 
 from ..config import PaginationConfig
 from ..database.db import get_session
-from ..database.models import Equity, Position, Trade
+from ..database.models import Equity, Position, Trade, RiskSettings
 from ..schemas.order_schema import OrderResponse, OrderSubmit
 from ..services.trade_executor import ensure_client
 from ..utils.jwt_auth import get_current_user_id
 
 router = APIRouter(prefix="/order", tags=["order"])
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 🔒 보안: 주문 서버 측 검증 (Server-Side Order Validation)
+# ============================================================
+
+
+async def validate_order_request(
+    session: AsyncSession,
+    user_id: int,
+    symbol: str,
+    qty: float,
+    leverage: int,
+    client=None,
+) -> Tuple[bool, Optional[str]]:
+    """
+    주문 요청 서버 측 검증
+
+    검증 항목:
+    1. 레버리지가 사용자 max_leverage 이하인지
+    2. 현재 포지션 수가 max_positions 미만인지
+    3. 주문 금액이 잔고의 합리적 범위 내인지 (선택적)
+
+    Returns:
+        Tuple[bool, Optional[str]]: (검증 통과 여부, 실패 시 에러 메시지)
+    """
+    try:
+        # 사용자 리스크 설정 조회
+        risk_result = await session.execute(
+            select(RiskSettings).where(RiskSettings.user_id == user_id)
+        )
+        risk_settings = risk_result.scalars().first()
+
+        # 리스크 설정이 없으면 기본값 사용
+        max_leverage = 10 if not risk_settings else risk_settings.max_leverage
+        max_positions = 5 if not risk_settings else risk_settings.max_positions
+
+        # 1. 레버리지 검증
+        if leverage > max_leverage:
+            return (
+                False,
+                f"레버리지가 최대 허용값({max_leverage}배)을 초과합니다. 요청: {leverage}배",
+            )
+
+        # 2. 현재 포지션 수 검증
+        position_count_result = await session.execute(
+            select(func.count())
+            .select_from(Position)
+            .where(Position.user_id == user_id)
+        )
+        current_positions = position_count_result.scalar() or 0
+
+        if current_positions >= max_positions:
+            return (
+                False,
+                f"최대 포지션 수({max_positions}개)에 도달했습니다. 현재: {current_positions}개",
+            )
+
+        # 3. 주문 수량 검증 (기본 검증)
+        if qty <= 0:
+            return False, "주문 수량은 0보다 커야 합니다"
+
+        if qty > 1000000:  # 최대 주문 수량 제한
+            return False, "주문 수량이 너무 큽니다 (최대: 1,000,000)"
+
+        # 4. 잔고 기반 검증 (선택적 - client가 제공된 경우)
+        if client:
+            try:
+                balance_info = await client.get_futures_balance()
+                available_balance = float(balance_info.get("available", 0))
+
+                # 레버리지 적용한 최대 허용 금액 계산
+                # 예: 잔고 1000 USDT, 레버리지 10x → 최대 10000 USDT 포지션 가능
+                # max_order_value = available_balance * leverage (참고용)
+
+                # 현재 시장 가격으로 주문 금액 추정 (symbol 기반)
+                # 참고: 정확한 계산을 위해서는 시장 가격 조회 필요
+                # 여기서는 기본적인 수량 제한만 적용
+                if qty * leverage > available_balance * 10:  # 안전 마진 적용
+                    logger.warning(
+                        f"[OrderValidation] Large order detected: user={user_id}, qty={qty}, leverage={leverage}, balance={available_balance}"
+                    )
+                    return False, "주문 금액이 가용 잔고 대비 너무 큽니다"
+
+            except Exception as e:
+                # 잔고 조회 실패 시 경고만 로그하고 계속 진행
+                logger.warning(f"[OrderValidation] Balance check failed: {e}")
+
+        logger.info(
+            f"[OrderValidation] Passed: user={user_id}, symbol={symbol}, qty={qty}, leverage={leverage}"
+        )
+        return True, None
+
+    except Exception as e:
+        logger.error(f"[OrderValidation] Validation error: {e}")
+        # 검증 로직 에러 시에도 주문은 진행 (가용성 우선)
+        # 단, 로깅으로 추적 가능하도록 함
+        return True, None
 
 
 class ClosePositionRequest(BaseModel):
@@ -25,9 +126,7 @@ async def open_orders(
     user_id: int = Depends(get_current_user_id),
 ):
     """미체결 주문 조회 (JWT 인증 필요, 자신의 주문만)"""
-    result = await session.execute(
-        select(Position).where(Position.user_id == user_id)
-    )
+    result = await session.execute(select(Position).where(Position.user_id == user_id))
     return result.scalars().all()
 
 
@@ -37,7 +136,7 @@ async def order_history(
         default=PaginationConfig.TRADES_DEFAULT_LIMIT,
         ge=1,
         le=PaginationConfig.TRADES_MAX_LIMIT,
-        description=f"페이지 크기 (최대 {PaginationConfig.TRADES_MAX_LIMIT})"
+        description=f"페이지 크기 (최대 {PaginationConfig.TRADES_MAX_LIMIT})",
     ),
     offset: int = Query(default=0, ge=0, description="시작 위치"),
     session: AsyncSession = Depends(get_session),
@@ -89,7 +188,7 @@ async def order_history(
             "has_more": offset + limit < total_count,
             "current_page": offset // limit + 1,
             "total_pages": (total_count + limit - 1) // limit if total_count > 0 else 0,
-        }
+        },
     }
 
 
@@ -99,7 +198,7 @@ async def equity_history(
         default=PaginationConfig.EQUITY_DEFAULT_LIMIT,
         ge=1,
         le=PaginationConfig.EQUITY_MAX_LIMIT,
-        description=f"페이지 크기 (최대 {PaginationConfig.EQUITY_MAX_LIMIT})"
+        description=f"페이지 크기 (최대 {PaginationConfig.EQUITY_MAX_LIMIT})",
     ),
     offset: int = Query(default=0, ge=0, description="시작 위치"),
     session: AsyncSession = Depends(get_session),
@@ -140,7 +239,7 @@ async def equity_history(
             "has_more": offset + limit < total_count,
             "current_page": offset // limit + 1,
             "total_pages": (total_count + limit - 1) // limit if total_count > 0 else 0,
-        }
+        },
     }
 
 
@@ -173,7 +272,32 @@ async def submit_order(
     try:
         # 거래소 클라이언트 생성 (API 키 검증 포함)
         client = await ensure_client(user_id, session, validate=True)
-        logger.info(f"[Order] User {user_id} submitting {payload.side} order for {payload.symbol}")
+        logger.info(
+            f"[Order] User {user_id} submitting {payload.side} order for {payload.symbol}"
+        )
+
+        # 🔒 서버 측 주문 검증 (레버리지, 포지션 수, 잔고)
+        is_valid, error_message = await validate_order_request(
+            session=session,
+            user_id=user_id,
+            symbol=payload.symbol,
+            qty=payload.qty,
+            leverage=payload.leverage,
+            client=client,
+        )
+
+        if not is_valid:
+            logger.warning(
+                f"[Order] Validation failed for user {user_id}: {error_message}"
+            )
+            return OrderResponse(
+                order_id="validation_failed",
+                status="rejected",
+                symbol=payload.symbol,
+                side=payload.side,
+                qty=payload.qty,
+                price=None,
+            )
 
         # 현재는 시장가 주문만 지원
         if payload.price_type != "market":
@@ -192,19 +316,21 @@ async def submit_order(
             symbol=payload.symbol,
             side=payload.side,
             qty=payload.qty,
-            leverage=payload.leverage
+            leverage=payload.leverage,
         )
 
         logger.info(f"[Order] Order executed: {order_result}")
 
         # 주문 결과 반환
         return OrderResponse(
-            order_id=str(order_result.get('orderId', 'unknown')),
+            order_id=str(order_result.get("orderId", "unknown")),
             status="filled",
             symbol=payload.symbol,
             side=payload.side,
             qty=payload.qty,
-            price=float(order_result.get('price', 0)) if order_result.get('price') else None,
+            price=float(order_result.get("price", 0))
+            if order_result.get("price")
+            else None,
         )
 
     except Exception as e:
@@ -246,8 +372,7 @@ async def close_position(
         # 포지션 조회
         result = await session.execute(
             select(Position).where(
-                Position.id == payload.position_id,
-                Position.user_id == user_id
+                Position.id == payload.position_id, Position.user_id == user_id
             )
         )
         position = result.scalars().first()
@@ -263,10 +388,12 @@ async def close_position(
             )
 
         # 반대 방향 주문 (청산)
-        close_side = "sell" if payload.side.lower() in ['long', 'buy'] else "buy"
+        close_side = "sell" if payload.side.lower() in ["long", "buy"] else "buy"
         qty = float(position.size)
 
-        logger.info(f"[ClosePosition] User {user_id} closing position {position.id}: {close_side} {qty} {payload.symbol}")
+        logger.info(
+            f"[ClosePosition] User {user_id} closing position {position.id}: {close_side} {qty} {payload.symbol}"
+        )
 
         # 거래소 클라이언트 생성
         client = await ensure_client(user_id, session, validate=True)
@@ -277,7 +404,7 @@ async def close_position(
             symbol=payload.symbol,
             side=close_side,
             qty=qty,
-            leverage=1  # 청산 시에는 레버리지 불필요
+            leverage=1,  # 청산 시에는 레버리지 불필요
         )
 
         logger.info(f"[ClosePosition] Position closed: {order_result}")
@@ -287,12 +414,14 @@ async def close_position(
         await session.commit()
 
         return OrderResponse(
-            order_id=str(order_result.get('orderId', 'unknown')),
+            order_id=str(order_result.get("orderId", "unknown")),
             status="filled",
             symbol=payload.symbol,
             side=close_side,
             qty=qty,
-            price=float(order_result.get('price', 0)) if order_result.get('price') else None,
+            price=float(order_result.get("price", 0))
+            if order_result.get("price")
+            else None,
         )
 
     except Exception as e:

@@ -137,16 +137,27 @@ class DynamicStrategyExecutor:
                 return self._default_hold_signal()
 
             # 진입 시그널 확인
-            signal = self.namespace["check_entry_signal"](candles, self.params)
+            signal_result = self.namespace["check_entry_signal"](candles, self.params)
+
+            # 시그널 결과 파싱 (문자열 또는 튜플/딕셔너리 형태 지원)
+            if isinstance(signal_result, dict):
+                signal = signal_result.get("signal", "HOLD")
+                enter_tag = signal_result.get("enter_tag", None)
+            elif isinstance(signal_result, tuple):
+                signal = signal_result[0] if len(signal_result) > 0 else "HOLD"
+                enter_tag = signal_result[1] if len(signal_result) > 1 else None
+            else:
+                signal = signal_result
+                enter_tag = self._generate_default_enter_tag(signal, candles)
 
             # 포지션이 없으면 진입 시그널 확인 (None 또는 빈 딕셔너리)
             if not current_position:  # None, {}, [] 모두 False
                 if signal == "LONG":
-                    logger.info(f"🟢 LONG signal detected, creating buy signal")
-                    return self._create_buy_signal(current_price, candles)
+                    logger.info(f"🟢 LONG signal detected (tag: {enter_tag}), creating buy signal")
+                    return self._create_buy_signal(current_price, candles, enter_tag)
                 elif signal == "SHORT":
-                    logger.info(f"🔴 SHORT signal detected, creating sell signal")
-                    return self._create_sell_signal(current_price, candles)
+                    logger.info(f"🔴 SHORT signal detected (tag: {enter_tag}), creating sell signal")
+                    return self._create_sell_signal(current_price, candles, enter_tag)
                 else:
                     return self._default_hold_signal()
 
@@ -168,7 +179,7 @@ class DynamicStrategyExecutor:
             logger.error(f"Error generating signal: {e}", exc_info=True)
             return self._default_hold_signal()
 
-    def _create_buy_signal(self, current_price: float, candles: List[Dict]) -> Dict:
+    def _create_buy_signal(self, current_price: float, candles: List[Dict], enter_tag: str = None) -> Dict:
         """매수 시그널 생성"""
         # 손절/익절 계산
         stop_loss = None
@@ -222,9 +233,10 @@ class DynamicStrategyExecutor:
             "take_profit": take_profit,
             "size": size,  # None으로 반환하여 bot_runner에서 계산하도록 함
             "size_metadata": size_metadata,  # 비율 정보 전달
+            "enter_tag": enter_tag,  # 시그널 태그 (차트 마커용)
         }
 
-    def _create_sell_signal(self, current_price: float, candles: List[Dict]) -> Dict:
+    def _create_sell_signal(self, current_price: float, candles: List[Dict], enter_tag: str = None) -> Dict:
         """매도 시그널 생성"""
         # 손절/익절 계산
         stop_loss = None
@@ -273,6 +285,7 @@ class DynamicStrategyExecutor:
             "take_profit": take_profit,
             "size": size,  # None으로 반환
             "size_metadata": size_metadata,  # 비율 정보 전달
+            "enter_tag": enter_tag,  # 시그널 태그 (차트 마커용)
         }
 
     def _should_exit_position(
@@ -327,6 +340,42 @@ class DynamicStrategyExecutor:
             "take_profit": None,
             "size": 0,
         }
+
+    def _generate_default_enter_tag(self, signal: str, candles: List[Dict]) -> Optional[str]:
+        """
+        기본 enter_tag 생성 (전략에서 태그를 제공하지 않는 경우)
+
+        캔들 데이터를 분석하여 시그널 원인을 추론합니다.
+        예: "ema_cross", "rsi_oversold", "breakout_high"
+        """
+        if signal not in ("LONG", "SHORT"):
+            return None
+
+        # 전략 파라미터에서 전략 타입 추출
+        strategy_type = self.params.get("type", "unknown")
+
+        # RSI 기반 태그
+        if strategy_type == "rsi" or "rsi" in str(self.params).lower():
+            rsi = self._calculate_rsi(candles, 14)
+            if rsi and len(rsi) > 0:
+                last_rsi = rsi[-1]
+                if last_rsi < 30:
+                    return "rsi_oversold"
+                elif last_rsi > 70:
+                    return "rsi_overbought"
+                else:
+                    return "rsi_signal"
+
+        # EMA 기반 태그
+        if strategy_type == "ema" or "ema" in str(self.params).lower():
+            return "ema_cross"
+
+        # 브레이크아웃 기반 태그
+        if strategy_type == "breakout" or "breakout" in str(self.params).lower():
+            return "breakout_high" if signal == "LONG" else "breakout_low"
+
+        # 기본 태그
+        return f"{strategy_type}_signal"
 
     # ===== 기술적 지표 계산 함수들 =====
 

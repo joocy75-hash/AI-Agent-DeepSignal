@@ -1,19 +1,33 @@
+"""
+봇 실행기 (Bot Runner)
+
+다중 봇 시스템 지원 버전
+- 기존: user_id 기반 (1 user = 1 bot)
+- 신규: bot_instance_id 기반 (1 user = N bots)
+
+관련 문서: docs/MULTI_BOT_03_IMPLEMENTATION.md
+관련 서비스: allocation_manager.py
+"""
+
 import asyncio
 import logging
 import json
 from collections import deque
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database.models import (
     BotStatus,
+    BotInstance,  # 다중 봇 시스템 (NEW)
+    BotType,      # 다중 봇 시스템 (NEW)
     Position,
     Strategy,
     Trade,
+    TradeSource,  # 다중 봇 시스템 (NEW)
     User,
     ApiKey,
     RiskSettings,
@@ -28,6 +42,9 @@ from ..services.trade_executor import (
 )
 from ..services.exchanges import exchange_manager
 from ..services.bitget_rest import get_bitget_rest, OrderSide
+from ..services.allocation_manager import allocation_manager  # 다중 봇 시스템 (NEW)
+from ..services.bot_isolation_manager import bot_isolation_manager  # 다중 봇 시스템 (NEW)
+from ..services.bot_recovery_manager import bot_recovery_manager  # 다중 봇 시스템 (NEW)
 from ..utils.crypto_secrets import decrypt_secret
 from ..websockets.ws_server import broadcast_to_user
 from ..services.telegram import (
@@ -43,12 +60,27 @@ logger = logging.getLogger(__name__)
 
 
 class BotRunner:
+    """
+    봇 실행 관리자
+
+    다중 봇 시스템 지원:
+    - tasks: bot_instance_id → Task (기존: user_id → Task)
+    - user_bots: user_id → Set[bot_instance_id] (사용자별 실행 중인 봇 추적)
+
+    하위 호환성:
+    - 기존 user_id 기반 API도 유지 (legacy BotStatus 테이블 사용)
+    """
+
     def __init__(self, market_queue: asyncio.Queue):
         self.market_queue = market_queue
+
+        # 기존: user_id 기반 (하위 호환성)
         self.tasks: Dict[int, asyncio.Task] = {}
-        self._daily_loss_exceeded: Dict[
-            int, bool
-        ] = {}  # 사용자별 일일 손실 초과 여부 캐시
+        self._daily_loss_exceeded: Dict[int, bool] = {}  # 사용자별 일일 손실 초과 여부 캐시
+
+        # 다중 봇 시스템: bot_instance_id 기반 (NEW)
+        self.instance_tasks: Dict[int, asyncio.Task] = {}  # bot_instance_id → Task
+        self.user_bots: Dict[int, Set[int]] = {}  # user_id → Set[bot_instance_id]
 
     async def check_daily_loss_limit(
         self, session: AsyncSession, user_id: int
@@ -306,6 +338,727 @@ class BotRunner:
         task = asyncio.create_task(self._run_loop(session_factory, user_id))
         self.tasks[user_id] = task
 
+    # ============================================================
+    # 다중 봇 시스템 메서드 (NEW)
+    # ============================================================
+
+    def is_instance_running(self, bot_instance_id: int) -> bool:
+        """봇 인스턴스가 실행 중인지 확인 (AI봇 + 그리드봇 모두 체크)"""
+        # AI 봇 체크
+        if bot_instance_id in self.instance_tasks and not self.instance_tasks[bot_instance_id].done():
+            return True
+
+        # 그리드 봇 체크 (초기화되었을 경우만)
+        try:
+            from ..services.grid_bot_runner import get_grid_bot_runner
+            grid_runner = get_grid_bot_runner(self.market_queue)
+            if grid_runner.is_running(bot_instance_id):
+                return True
+        except Exception:
+            pass  # GridBotRunner가 아직 초기화되지 않은 경우
+
+        return False
+
+    def get_user_running_bots(self, user_id: int) -> Set[int]:
+        """사용자의 실행 중인 봇 인스턴스 ID 목록 반환"""
+        return self.user_bots.get(user_id, set()).copy()
+
+    def get_running_instance_count(self, user_id: int) -> int:
+        """사용자의 실행 중인 봇 인스턴스 수 반환"""
+        return len(self.user_bots.get(user_id, set()))
+
+    async def start_instance(
+        self,
+        session_factory,
+        bot_instance_id: int,
+        user_id: int
+    ):
+        """
+        봇 인스턴스 시작 (다중 봇 시스템)
+
+        Args:
+            session_factory: DB 세션 팩토리
+            bot_instance_id: 봇 인스턴스 ID
+            user_id: 사용자 ID (user_bots 추적용)
+        """
+        if self.is_instance_running(bot_instance_id):
+            logger.warning(f"Bot instance {bot_instance_id} is already running")
+            return
+
+        # 태스크 생성
+        task = asyncio.create_task(
+            self._run_instance_loop(session_factory, bot_instance_id, user_id)
+        )
+        self.instance_tasks[bot_instance_id] = task
+
+        # 사용자별 봇 추적
+        if user_id not in self.user_bots:
+            self.user_bots[user_id] = set()
+        self.user_bots[user_id].add(bot_instance_id)
+
+        logger.info(
+            f"Started bot instance {bot_instance_id} for user {user_id}. "
+            f"User now has {len(self.user_bots[user_id])} running bot(s)"
+        )
+
+    def stop_instance(self, bot_instance_id: int, user_id: int):
+        """
+        봇 인스턴스 정지 (다중 봇 시스템)
+
+        Args:
+            bot_instance_id: 봇 인스턴스 ID
+            user_id: 사용자 ID (user_bots 추적용)
+        """
+        stopped = False
+
+        # 1. AI 봇 체크 (BotRunner.instance_tasks)
+        if self.is_instance_running(bot_instance_id):
+            logger.info(f"Stopping AI bot instance {bot_instance_id}")
+            self.instance_tasks[bot_instance_id].cancel()
+            stopped = True
+
+        # 2. 그리드 봇 체크 (GridBotRunner.tasks)
+        from ..services.grid_bot_runner import get_grid_bot_runner
+        grid_runner = get_grid_bot_runner(self.market_queue)
+        if grid_runner.is_running(bot_instance_id):
+            logger.info(f"Stopping Grid bot instance {bot_instance_id}")
+            grid_runner.stop(bot_instance_id)
+            stopped = True
+
+        if stopped:
+            # user_bots에서 제거
+            if user_id in self.user_bots:
+                self.user_bots[user_id].discard(bot_instance_id)
+                if not self.user_bots[user_id]:
+                    del self.user_bots[user_id]
+        else:
+            logger.warning(f"Bot instance {bot_instance_id} is not running")
+
+    async def stop_all_user_instances(self, user_id: int):
+        """사용자의 모든 봇 인스턴스 정지"""
+        bot_ids = self.get_user_running_bots(user_id)
+        for bot_id in bot_ids:
+            self.stop_instance(bot_id, user_id)
+        logger.info(f"Stopped all {len(bot_ids)} bot instances for user {user_id}")
+
+    async def _run_instance_loop(
+        self,
+        session_factory,
+        bot_instance_id: int,
+        user_id: int
+    ):
+        """
+        봇 인스턴스 실행 루프 (다중 봇 시스템)
+
+        기존 _run_loop와 유사하지만:
+        - BotInstance 테이블에서 설정 로드
+        - allocation_manager로 할당된 잔고 계산
+        - 봇 인스턴스별 격리된 포지션 관리
+        - BotType에 따라 AI봇/그리드봇 분기
+        """
+        logger.info(f"Starting bot instance loop: bot_id={bot_instance_id}, user_id={user_id}")
+
+        try:
+            async with session_factory() as session:
+                # 1. 봇 인스턴스 설정 로드
+                try:
+                    bot_instance = await self._get_bot_instance(session, bot_instance_id, user_id)
+                    logger.info(
+                        f"Loaded bot instance '{bot_instance.name}' (ID: {bot_instance_id}), "
+                        f"type: {bot_instance.bot_type}, symbol: {bot_instance.symbol}, "
+                        f"allocation: {bot_instance.allocation_percent}%"
+                    )
+
+                    # 2. 봇 타입에 따라 분기
+                    if bot_instance.bot_type == BotType.GRID:
+                        # 그리드 봇은 GridBotRunner로 위임
+                        logger.info(f"Delegating to GridBotRunner for bot {bot_instance_id}")
+                        from ..services.grid_bot_runner import get_grid_bot_runner
+                        grid_runner = get_grid_bot_runner(self.market_queue)
+                        await grid_runner.start(session_factory, bot_instance_id, user_id)
+                        return  # GridBotRunner가 자체 루프 관리
+                except Exception as e:
+                    logger.error(f"Failed to load bot instance {bot_instance_id}: {e}", exc_info=True)
+                    await self._update_bot_instance_error(session, bot_instance_id, str(e))
+                    return
+
+                # 2. 전략 로드 (AI 봇인 경우)
+                strategy = None
+                if bot_instance.strategy_id:
+                    try:
+                        strategy = await self._get_strategy_by_id(session, bot_instance.strategy_id)
+                        logger.info(f"Loaded strategy '{strategy.name}' for bot instance {bot_instance_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to load strategy for bot instance {bot_instance_id}: {e}")
+                        await self._update_bot_instance_error(session, bot_instance_id, f"STRATEGY_LOAD_ERROR: {e}")
+                        return
+
+                # 3. Bitget API 클라이언트 초기화
+                try:
+                    bitget_client = await self._init_bitget_client(session, user_id)
+                    logger.info(f"Bitget API client initialized for bot instance {bot_instance_id}")
+                except InvalidApiKeyError as e:
+                    logger.error(f"Invalid API key for user {user_id}: {e}")
+                    await self._update_bot_instance_error(session, bot_instance_id, "INVALID_API_KEY")
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to initialize Bitget client: {e}", exc_info=True)
+                    await self._update_bot_instance_error(session, bot_instance_id, f"CLIENT_INIT_ERROR: {e}")
+                    return
+
+                # 4. AllocationManager에서 포지션 동기화
+                await allocation_manager.sync_used_amounts_from_positions(
+                    user_id, bot_instance_id, bitget_client, session
+                )
+
+                # 5. 캔들 버퍼 초기화
+                candle_buffer = deque(maxlen=200)
+                symbol = bot_instance.symbol  # 예: "BTCUSDT"
+
+                try:
+                    # 전략 파라미터에서 타임프레임 가져오기
+                    strategy_params = json.loads(strategy.params) if strategy and strategy.params else {}
+                    timeframe = strategy_params.get("timeframe", "1h")
+
+                    historical = await bitget_client.get_historical_candles(
+                        symbol=symbol, interval=timeframe, limit=200
+                    )
+                    for candle in historical:
+                        candle_buffer.append({
+                            "open": float(candle.get("open", 0)),
+                            "high": float(candle.get("high", 0)),
+                            "low": float(candle.get("low", 0)),
+                            "close": float(candle.get("close", 0)),
+                            "volume": float(candle.get("volume", 0)),
+                            "time": candle.get("timestamp", 0),
+                        })
+                    logger.info(f"✅ Loaded {len(candle_buffer)} historical candles for bot {bot_instance_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to load historical candles for bot {bot_instance_id}: {e}")
+
+                # 6. 메인 트레이딩 루프
+                consecutive_errors = 0
+                max_consecutive_errors = 10
+                current_position = None
+
+                while True:
+                    try:
+                        # 마켓 데이터 수신
+                        try:
+                            market = await asyncio.wait_for(self.market_queue.get(), timeout=60.0)
+                        except asyncio.TimeoutError:
+                            logger.warning(f"No market data for 60s (bot {bot_instance_id})")
+                            continue
+
+                        price = float(market.get("price", 0))
+                        market_symbol = market.get("symbol", "BTCUSDT")
+
+                        # 심볼 필터링
+                        normalized_market = market_symbol.replace("/", "").replace("-", "").upper()
+                        normalized_bot = symbol.replace("/", "").replace("-", "").upper()
+
+                        if normalized_market != normalized_bot:
+                            continue  # 다른 심볼은 무시
+
+                        if price <= 0:
+                            continue
+
+                        # 캔들 버퍼 업데이트
+                        new_candle = {
+                            "open": market.get("open", price),
+                            "high": market.get("high", price),
+                            "low": market.get("low", price),
+                            "close": market.get("close", price),
+                            "volume": market.get("volume", 0),
+                            "time": market.get("time", 0),
+                        }
+                        candle_buffer.append(new_candle)
+                        candles = list(candle_buffer)
+
+                        # 전략 실행
+                        if strategy:
+                            try:
+                                signal_result = generate_signal_with_strategy(
+                                    strategy_code=strategy.code,
+                                    current_price=price,
+                                    candles=candles,
+                                    params_json=strategy.params,
+                                    current_position=current_position,
+                                )
+                                signal_action = signal_result.get("action", "hold")
+                                signal_confidence = signal_result.get("confidence", 0)
+                                signal_reason = signal_result.get("reason", "")
+                            except Exception as e:
+                                logger.error(f"Strategy error for bot {bot_instance_id}: {e}")
+                                signal_action = "hold"
+                                signal_confidence = 0
+                                signal_reason = ""
+                        else:
+                            signal_action = "hold"
+                            signal_confidence = 0
+                            signal_reason = "No strategy"
+
+                        # 포지션 청산
+                        if signal_action == "close" and current_position:
+                            await self._close_instance_position(
+                                session, bitget_client, bot_instance, user_id,
+                                current_position, price, signal_reason
+                            )
+                            current_position = None
+
+                        # 신규 포지션 진입
+                        elif signal_action in {"buy", "sell"} and not current_position:
+                            # 1. 포지션 격리 체크 (같은 봇이 이미 포지션 보유 중인지)
+                            position_side = "long" if signal_action == "buy" else "short"
+                            can_open, isolation_msg = await bot_isolation_manager.can_open_position(
+                                user_id, bot_instance_id, symbol, position_side, session
+                            )
+                            if not can_open:
+                                logger.warning(f"Bot {bot_instance_id}: Position blocked - {isolation_msg}")
+                                continue
+
+                            # 2. 할당된 잔고 확인
+                            available = await allocation_manager.get_available_balance(
+                                user_id, bot_instance_id, bitget_client, session
+                            )
+
+                            if available < 10:  # 최소 $10 필요
+                                logger.warning(f"Bot {bot_instance_id}: Insufficient allocated balance (${available:.2f})")
+                                continue
+
+                            # 주문 크기 계산 (할당된 잔고 기반)
+                            leverage = bot_instance.max_leverage
+                            position_value = available * 0.95  # 95% 사용 (여유분 5%)
+                            signal_size = (position_value * leverage) / price
+
+                            # 최소 주문량 체크
+                            min_sizes = {"BTCUSDT": 0.001, "ETHUSDT": 0.01}
+                            min_size = min_sizes.get(symbol, 0.001)
+                            if signal_size < min_size:
+                                signal_size = min_size
+
+                            # 3. AllocationManager에서 금액 예약
+                            can_order, msg = await allocation_manager.request_order_amount(
+                                user_id, bot_instance_id, position_value, bitget_client, session
+                            )
+                            if not can_order:
+                                logger.warning(f"Bot {bot_instance_id}: Order rejected - {msg}")
+                                continue
+
+                            try:
+                                # 레버리지 설정
+                                await bitget_client.set_leverage(
+                                    symbol=symbol, leverage=leverage, margin_coin="USDT"
+                                )
+
+                                # 주문 실행
+                                order_side = OrderSide.BUY if signal_action == "buy" else OrderSide.SELL
+                                order_result = await bitget_client.place_market_order(
+                                    symbol=symbol,
+                                    side=order_side,
+                                    size=signal_size,
+                                    margin_coin="USDT",
+                                    reduce_only=False,
+                                )
+
+                                # 4. 포지션 격리 매니저에 등록
+                                exchange_order_id = order_result.get("data", {}).get("orderId")
+                                await bot_isolation_manager.register_position(
+                                    user_id, bot_instance_id, symbol, position_side,
+                                    signal_size, price, exchange_order_id, session
+                                )
+
+                                # 거래 기록 (bot_instance_id 포함)
+                                trade_id = await self._record_instance_entry_trade(
+                                    session, user_id, bot_instance_id, symbol,
+                                    signal_action, price, signal_size, leverage,
+                                    bot_instance.strategy_id
+                                )
+
+                                current_position = {
+                                    "side": "long" if signal_action == "buy" else "short",
+                                    "entry_price": price,
+                                    "size": signal_size,
+                                    "symbol": symbol,
+                                    "trade_id": trade_id,
+                                    "leverage": leverage,
+                                    "position_value": position_value,
+                                }
+
+                                logger.info(
+                                    f"✅ Bot {bot_instance_id}: Opened {signal_action} position "
+                                    f"@ ${price:.2f}, size={signal_size:.6f}, leverage={leverage}x"
+                                )
+
+                                # 텔레그램 알림 (봇 이름 포함)
+                                if bot_instance.telegram_notify:
+                                    await self._send_instance_trade_notification(
+                                        bot_instance, signal_action, symbol, price,
+                                        signal_size, leverage, order_result
+                                    )
+
+                            except Exception as e:
+                                # 주문 실패 시 예약 금액 해제
+                                allocation_manager.release_order_amount(bot_instance_id, position_value)
+                                logger.error(f"Order error for bot {bot_instance_id}: {e}", exc_info=True)
+
+                        # 연속 에러 리셋
+                        consecutive_errors = 0
+                        await asyncio.sleep(0.1)
+
+                    except Exception as e:
+                        consecutive_errors += 1
+
+                        # 복구 매니저로 에러 기록 및 재시도 여부 결정
+                        should_retry, error_msg = await bot_recovery_manager.record_error(
+                            bot_instance_id, e, session, context="trading_loop"
+                        )
+
+                        logger.error(
+                            f"Error in bot {bot_instance_id} loop (consecutive: {consecutive_errors}): {e}",
+                            exc_info=True
+                        )
+
+                        if not should_retry or consecutive_errors >= max_consecutive_errors:
+                            logger.critical(f"Bot {bot_instance_id} stopping: {error_msg}")
+                            await self._update_bot_instance_error(session, bot_instance_id, error_msg)
+                            break
+
+                        # 에러 유형에 따른 대기 시간
+                        error_type = bot_recovery_manager.classify_error(e)
+                        retry_delay = bot_recovery_manager.get_retry_delay(bot_instance_id, error_type)
+                        await asyncio.sleep(min(retry_delay, 10))  # 루프 내에서는 최대 10초
+
+        except asyncio.CancelledError:
+            logger.info(f"Bot instance {bot_instance_id} cancelled by user")
+            # 복구 매니저 상태 정리
+            bot_recovery_manager.cancel_recovery(bot_instance_id)
+            try:
+                async with session_factory() as cleanup_session:
+                    await self._update_bot_instance_stopped(cleanup_session, bot_instance_id)
+            except Exception as e:
+                logger.error(f"Failed to update bot instance status: {e}")
+            raise
+
+        except Exception as exc:
+            logger.error(f"Fatal error in bot instance {bot_instance_id}: {exc}", exc_info=True)
+            # 치명적 에러 기록
+            try:
+                async with session_factory() as error_session:
+                    await bot_recovery_manager.record_error(
+                        bot_instance_id, exc, error_session, context="fatal_error"
+                    )
+            except Exception:
+                pass
+
+        finally:
+            # 리소스 정리
+            if bot_instance_id in self.instance_tasks:
+                del self.instance_tasks[bot_instance_id]
+            if user_id in self.user_bots:
+                self.user_bots[user_id].discard(bot_instance_id)
+                if not self.user_bots[user_id]:
+                    del self.user_bots[user_id]
+
+            # AllocationManager 사용량 리셋
+            allocation_manager.reset_bot_usage(bot_instance_id)
+
+            # BotIsolationManager 캐시 정리
+            bot_isolation_manager.clear_bot_cache(bot_instance_id, user_id)
+
+            # BotRecoveryManager 에러 카운터 리셋 (정상 종료 시)
+            bot_recovery_manager.reset_error_count(bot_instance_id)
+
+            logger.info(f"Bot instance {bot_instance_id} loop ended. Resources cleaned up.")
+
+    async def _get_bot_instance(
+        self,
+        session: AsyncSession,
+        bot_instance_id: int,
+        user_id: int
+    ) -> BotInstance:
+        """봇 인스턴스 조회"""
+        result = await session.execute(
+            select(BotInstance).where(
+                and_(
+                    BotInstance.id == bot_instance_id,
+                    BotInstance.user_id == user_id,
+                    BotInstance.is_active == True
+                )
+            )
+        )
+        bot_instance = result.scalar_one_or_none()
+        if not bot_instance:
+            raise ValueError(f"Bot instance {bot_instance_id} not found for user {user_id}")
+        return bot_instance
+
+    async def _get_strategy_by_id(self, session: AsyncSession, strategy_id: int) -> Strategy:
+        """전략 ID로 조회"""
+        result = await session.execute(
+            select(Strategy).where(Strategy.id == strategy_id)
+        )
+        strategy = result.scalar_one_or_none()
+        if not strategy:
+            raise ValueError(f"Strategy {strategy_id} not found")
+        return strategy
+
+    async def _init_bitget_client(self, session: AsyncSession, user_id: int):
+        """Bitget API 클라이언트 초기화"""
+        result = await session.execute(
+            select(ApiKey).where(ApiKey.user_id == user_id)
+        )
+        api_key_obj = result.scalars().first()
+
+        if not api_key_obj:
+            raise InvalidApiKeyError("API key not found in database")
+
+        api_key = decrypt_secret(api_key_obj.encrypted_api_key)
+        api_secret = decrypt_secret(api_key_obj.encrypted_secret_key)
+        passphrase = (
+            decrypt_secret(api_key_obj.encrypted_passphrase)
+            if api_key_obj.encrypted_passphrase
+            else ""
+        )
+
+        if not all([api_key, api_secret, passphrase]):
+            raise InvalidApiKeyError("Invalid or incomplete API credentials")
+
+        return get_bitget_rest(api_key, api_secret, passphrase)
+
+    async def _update_bot_instance_error(
+        self,
+        session: AsyncSession,
+        bot_instance_id: int,
+        error_msg: str
+    ):
+        """봇 인스턴스 에러 상태 업데이트"""
+        try:
+            result = await session.execute(
+                select(BotInstance).where(BotInstance.id == bot_instance_id)
+            )
+            bot = result.scalar_one_or_none()
+            if bot:
+                bot.last_error = error_msg[:500]  # 최대 500자
+                bot.is_running = False
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to update bot instance error: {e}")
+
+    async def _update_bot_instance_stopped(
+        self,
+        session: AsyncSession,
+        bot_instance_id: int
+    ):
+        """봇 인스턴스 정지 상태 업데이트"""
+        try:
+            result = await session.execute(
+                select(BotInstance).where(BotInstance.id == bot_instance_id)
+            )
+            bot = result.scalar_one_or_none()
+            if bot:
+                bot.is_running = False
+                bot.last_stopped_at = datetime.utcnow()
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to update bot instance stopped status: {e}")
+
+    async def _record_instance_entry_trade(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        bot_instance_id: int,
+        symbol: str,
+        side: str,
+        entry_price: float,
+        qty: float,
+        leverage: int,
+        strategy_id: Optional[int] = None,
+    ) -> int:
+        """
+        봇 인스턴스 진입 거래 기록 (다중 봇 시스템)
+
+        Returns:
+            trade_id: 생성된 거래 ID
+        """
+        trade = Trade(
+            user_id=user_id,
+            bot_instance_id=bot_instance_id,  # 다중 봇 시스템 (NEW)
+            trade_source=TradeSource.BOT_INSTANCE,  # 다중 봇 시스템 (NEW)
+            symbol=symbol,
+            side=side.upper(),
+            qty=Decimal(str(qty)),
+            entry_price=Decimal(str(entry_price)),
+            exit_price=None,
+            pnl=None,
+            pnl_percent=None,
+            strategy_id=strategy_id,
+            leverage=leverage,
+            exit_reason=None,
+        )
+        session.add(trade)
+        await session.commit()
+        await session.refresh(trade)
+
+        logger.info(
+            f"📝 Bot {bot_instance_id} trade entry: ID={trade.id}, {symbol} {side.upper()} "
+            f"@ ${entry_price:.2f}, qty={qty}, leverage={leverage}x"
+        )
+        return trade.id
+
+    async def _close_instance_position(
+        self,
+        session: AsyncSession,
+        bitget_client,
+        bot_instance: BotInstance,
+        user_id: int,
+        position: dict,
+        exit_price: float,
+        reason: str
+    ):
+        """봇 인스턴스 포지션 청산"""
+        try:
+            close_side = OrderSide.SELL if position["side"] == "long" else OrderSide.BUY
+
+            await bitget_client.place_market_order(
+                symbol=position["symbol"],
+                side=close_side,
+                size=position["size"],
+                margin_coin="USDT",
+                reduce_only=True,
+            )
+
+            # PnL 계산
+            entry_price = position["entry_price"]
+            leverage = position.get("leverage", 10)
+            position_size = position["size"]
+
+            if position["side"] == "long":
+                pnl_usdt = (exit_price - entry_price) * position_size * leverage
+                pnl_percent = ((exit_price - entry_price) / entry_price) * 100 * leverage
+            else:
+                pnl_usdt = (entry_price - exit_price) * position_size * leverage
+                pnl_percent = ((entry_price - exit_price) / entry_price) * 100 * leverage
+
+            # Trade 레코드 업데이트
+            if position.get("trade_id"):
+                exit_tag = self._generate_exit_tag(reason, pnl_percent)
+                await self._update_trade_exit(
+                    session, position["trade_id"], exit_price, pnl_usdt, pnl_percent, reason,
+                    exit_tag=exit_tag
+                )
+
+            # BotInstance 통계 업데이트
+            await self._update_bot_instance_stats(
+                session, bot_instance.id, pnl_usdt, pnl_usdt > 0
+            )
+
+            # AllocationManager 금액 해제
+            if "position_value" in position:
+                allocation_manager.release_order_amount(bot_instance.id, position["position_value"])
+
+            # BotIsolationManager에서 포지션 정리
+            await bot_isolation_manager.close_position(
+                user_id, bot_instance.id, position["symbol"], exit_price, pnl_usdt, session
+            )
+
+            logger.info(
+                f"✅ Bot {bot_instance.id}: Closed position. PnL: ${pnl_usdt:.2f} ({pnl_percent:.2f}%)"
+            )
+
+            # 텔레그램 알림
+            if bot_instance.telegram_notify:
+                await self._send_instance_close_notification(
+                    bot_instance, position, exit_price, pnl_usdt, pnl_percent, reason
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to close position for bot {bot_instance.id}: {e}", exc_info=True)
+
+    async def _update_bot_instance_stats(
+        self,
+        session: AsyncSession,
+        bot_instance_id: int,
+        pnl: float,
+        is_win: bool
+    ):
+        """봇 인스턴스 통계 업데이트"""
+        try:
+            result = await session.execute(
+                select(BotInstance).where(BotInstance.id == bot_instance_id)
+            )
+            bot = result.scalar_one_or_none()
+            if bot:
+                bot.total_trades += 1
+                if is_win:
+                    bot.winning_trades += 1
+                bot.total_pnl = float(bot.total_pnl or 0) + pnl
+                bot.last_trade_at = datetime.utcnow()
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to update bot instance stats: {e}")
+
+    async def _send_instance_trade_notification(
+        self,
+        bot_instance: BotInstance,
+        action: str,
+        symbol: str,
+        price: float,
+        size: float,
+        leverage: int,
+        order_result: dict
+    ):
+        """봇 인스턴스 거래 체결 알림"""
+        try:
+            notifier = get_telegram_notifier()
+            if notifier.is_enabled():
+                total_value = price * size * leverage
+                order_id = order_result.get("data", {}).get("orderId", "N/A")
+
+                order_filled_info = OrderFilledInfo(
+                    symbol=symbol,
+                    direction="Long" if action == "buy" else "Short",
+                    order_type="시장가",
+                    order_price=price,
+                    filled_price=price,
+                    quantity=size,
+                    filled_quantity=size,
+                    leverage=leverage,
+                    total_value=total_value,
+                    order_id=order_id,
+                    status=f"체결 (Bot: {bot_instance.name})",
+                )
+                await notifier.notify_order_filled(order_filled_info)
+        except Exception as e:
+            logger.warning(f"Telegram notification failed: {e}")
+
+    async def _send_instance_close_notification(
+        self,
+        bot_instance: BotInstance,
+        position: dict,
+        exit_price: float,
+        pnl_usdt: float,
+        pnl_percent: float,
+        reason: str
+    ):
+        """봇 인스턴스 청산 알림"""
+        try:
+            notifier = get_telegram_notifier()
+            if notifier.is_enabled():
+                trade_result = TradeResult(
+                    symbol=position["symbol"],
+                    direction="Long" if position["side"] == "long" else "Short",
+                    entry_price=position["entry_price"],
+                    exit_price=exit_price,
+                    quantity=position["size"],
+                    pnl_percent=pnl_percent,
+                    pnl_usdt=pnl_usdt,
+                    exit_reason=f"{reason} (Bot: {bot_instance.name})",
+                    duration_minutes=0.0,
+                )
+                await notifier.notify_close_trade(trade_result)
+        except Exception as e:
+            logger.warning(f"Telegram notification failed: {e}")
+
     async def _run_loop(self, session_factory, user_id: int):
         """
         봇 실행 메인 루프 (개선된 에러 핸들링)
@@ -531,6 +1284,7 @@ class BotRunner:
                             signal_reason = signal_result.get("reason", "")
                             signal_size_from_strategy = signal_result.get("size", None)
                             size_metadata = signal_result.get("size_metadata", None)
+                            signal_enter_tag = signal_result.get("enter_tag", None)  # 시그널 태그
 
                             # 실제 잔고 기반으로 주문 크기 계산
                             # ⚠️ 중요: buy/sell 시그널일 때만 잔고 조회 (API Rate Limit 방지)
@@ -662,6 +1416,8 @@ class BotRunner:
 
                                 # Trade 레코드 업데이트
                                 if trade_id:
+                                    # exit_tag 생성 (청산 사유 기반)
+                                    exit_tag = self._generate_exit_tag(signal_reason, pnl_percent)
                                     await self._update_trade_exit(
                                         session,
                                         trade_id,
@@ -669,6 +1425,7 @@ class BotRunner:
                                         pnl_usdt,
                                         pnl_percent,
                                         signal_reason,
+                                        exit_tag=exit_tag,
                                     )
 
                                 # 📱 텔레그램 알림 전송 (청산 유형별 상세 알림) - 포지션 초기화 전에 전송!
@@ -932,6 +1689,7 @@ class BotRunner:
                                     signal_size,
                                     allowed_leverage,
                                     strategy.id,
+                                    enter_tag=signal_enter_tag,  # 시그널 태그 저장
                                 )
 
                                 current_position = {
@@ -1141,9 +1899,15 @@ class BotRunner:
         qty: float,
         leverage: int,
         strategy_id: int | None = None,
+        enter_tag: str | None = None,
+        order_tag: str | None = None,
     ) -> int:
         """
         진입 시 거래 기록 생성 (청산 전 상태)
+
+        Args:
+            enter_tag: 진입 시그널 태그 (예: "rsi_oversold", "ema_cross")
+            order_tag: 주문 태그 (예: "main_entry", "dca_1")
 
         Returns:
             trade_id: 생성된 거래 ID (청산 시 업데이트용)
@@ -1160,6 +1924,8 @@ class BotRunner:
             strategy_id=strategy_id,
             leverage=leverage,
             exit_reason=None,  # 아직 청산 안됨
+            enter_tag=enter_tag,  # 시그널 태그 (차트 마커용)
+            order_tag=order_tag,  # 주문 태그
         )
         session.add(trade)
         await session.commit()
@@ -1167,7 +1933,7 @@ class BotRunner:
 
         logger.info(
             f"📝 Trade entry recorded: ID={trade.id}, {symbol} {side.upper()} "
-            f"@ ${entry_price:.2f}, qty={qty}, leverage={leverage}x"
+            f"@ ${entry_price:.2f}, qty={qty}, leverage={leverage}x, tag={enter_tag}"
         )
         return trade.id
 
@@ -1179,9 +1945,13 @@ class BotRunner:
         pnl: float,
         pnl_percent: float,
         exit_reason: str,
+        exit_tag: str | None = None,
     ):
         """
         청산 시 거래 기록 업데이트
+
+        Args:
+            exit_tag: 청산 시그널 태그 (예: "tp_hit", "sl_triggered", "signal_reverse")
         """
         try:
             result = await session.execute(
@@ -1194,14 +1964,53 @@ class BotRunner:
                 trade.pnl = Decimal(str(round(pnl, 8)))
                 trade.pnl_percent = round(pnl_percent, 2)
                 trade.exit_reason = exit_reason
+                trade.exit_tag = exit_tag  # 청산 시그널 태그 (차트 마커용)
                 await session.commit()
 
                 logger.info(
                     f"📝 Trade exit updated: ID={trade_id}, "
-                    f"Exit @ ${exit_price:.2f}, PnL: ${pnl:.2f} ({pnl_percent:.2f}%)"
+                    f"Exit @ ${exit_price:.2f}, PnL: ${pnl:.2f} ({pnl_percent:.2f}%), tag={exit_tag}"
                 )
             else:
                 logger.warning(f"Trade {trade_id} not found for exit update")
 
         except Exception as e:
             logger.error(f"Failed to update trade exit: {e}", exc_info=True)
+
+    def _generate_exit_tag(self, exit_reason: str, pnl_percent: float) -> str:
+        """
+        청산 사유와 PnL을 기반으로 exit_tag 생성
+
+        Args:
+            exit_reason: 청산 사유 문자열
+            pnl_percent: 수익률 (%)
+
+        Returns:
+            exit_tag: 차트 마커용 청산 태그
+        """
+        reason_lower = exit_reason.lower() if exit_reason else ""
+
+        # 손절 관련
+        if "stop_loss" in reason_lower or "sl" in reason_lower or "손절" in reason_lower:
+            return "sl_triggered"
+
+        # 익절 관련
+        if "take_profit" in reason_lower or "tp" in reason_lower or "익절" in reason_lower:
+            return "tp_hit"
+
+        # 청산가 관련
+        if "liquidation" in reason_lower or "청산" in reason_lower:
+            return "liquidation"
+
+        # 시그널 반전
+        if "signal" in reason_lower or "reverse" in reason_lower:
+            return "signal_reverse"
+
+        # PnL 기반 태그
+        if pnl_percent >= 1.0:
+            return "profit_exit"
+        elif pnl_percent <= -1.0:
+            return "loss_exit"
+
+        # 기본값
+        return "manual_close"

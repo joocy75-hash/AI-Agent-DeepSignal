@@ -154,6 +154,92 @@ class TelegramBotHandler:
 
     # ==================== 명령어 핸들러 ====================
 
+    async def _get_db_session(self):
+        """비동기 DB 세션 생성"""
+        from ...database.db import AsyncSessionLocal
+
+        return AsyncSessionLocal()
+
+    async def _get_user_trades_today(self, session) -> dict:
+        """오늘 거래 데이터 조회"""
+        from ...database.models import Trade
+        from sqlalchemy import select, func
+        from datetime import date
+
+        today = date.today()
+
+        # 오늘 거래 조회
+        result = await session.execute(
+            select(Trade).where(func.date(Trade.created_at) == today)
+        )
+        trades = result.scalars().all()
+
+        if not trades:
+            return {"count": 0, "wins": 0, "losses": 0, "pnl": 0.0}
+
+        wins = sum(1 for t in trades if float(t.pnl or 0) > 0)
+        losses = sum(1 for t in trades if float(t.pnl or 0) < 0)
+        total_pnl = sum(float(t.pnl or 0) for t in trades)
+
+        return {"count": len(trades), "wins": wins, "losses": losses, "pnl": total_pnl}
+
+    async def _get_profit_summary(self, session) -> dict:
+        """수익 요약 조회"""
+        from ...database.models import Trade
+        from sqlalchemy import select, func
+        from datetime import date, timedelta
+
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+        month_start = today.replace(day=1)
+
+        # 기간별 수익 계산
+        async def get_pnl_sum(start_date):
+            result = await session.execute(
+                select(func.sum(Trade.pnl)).where(
+                    func.date(Trade.created_at) >= start_date
+                )
+            )
+            return float(result.scalar() or 0)
+
+        return {
+            "today": await get_pnl_sum(today),
+            "week": await get_pnl_sum(week_start),
+            "month": await get_pnl_sum(month_start),
+            "total": (await session.execute(select(func.sum(Trade.pnl)))).scalar() or 0,
+        }
+
+    async def _get_trade_counts(self, session) -> dict:
+        """거래 횟수 조회"""
+        from ...database.models import Trade
+        from sqlalchemy import select, func
+        from datetime import date, timedelta
+
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+
+        today_count = (
+            await session.execute(
+                select(func.count())
+                .select_from(Trade)
+                .where(func.date(Trade.created_at) == today)
+            )
+        ).scalar() or 0
+
+        week_count = (
+            await session.execute(
+                select(func.count())
+                .select_from(Trade)
+                .where(func.date(Trade.created_at) >= week_start)
+            )
+        ).scalar() or 0
+
+        total_count = (
+            await session.execute(select(func.count()).select_from(Trade))
+        ).scalar() or 0
+
+        return {"today": today_count, "week": week_count, "total": total_count}
+
     async def handle_welcome(self, chat_id: int):
         """환영 메시지"""
         msg = """🤖 <b>비트해커 트레이딩 봇</b>
@@ -188,108 +274,257 @@ class TelegramBotHandler:
         await self._send_message(chat_id, msg)
 
     async def handle_daily(self, chat_id: int):
-        """오늘 거래 현황"""
-        # TODO: 실제 데이터 연동
-        today = datetime.now().strftime("%Y-%m-%d")
-        msg = f"""📊 <b>일일 거래 현황</b>
+        """오늘 거래 현황 (실제 DB 연동)"""
+        try:
+            async with await self._get_db_session() as session:
+                data = await self._get_user_trades_today(session)
+
+                today = datetime.now().strftime("%Y-%m-%d")
+                count = data["count"]
+                wins = data["wins"]
+                losses = data["losses"]
+                pnl = data["pnl"]
+                win_rate = f"{(wins / count * 100):.1f}" if count > 0 else "--"
+                pnl_emoji = "📈" if pnl >= 0 else "📉"
+
+                msg = f"""📊 <b>일일 거래 현황</b>
 
 📅 {today}
 ━━━━━━━━━━━━━━━━━━━━━
-• 총 거래: 0회
-• 승/패: 0승 0패
-• 승률: --%
-• 손익: 📈 +0.00 USDT (0.00%)
+• 총 거래: {count}회
+• 승/패: {wins}승 {losses}패
+• 승률: {win_rate}%
+• 손익: {pnl_emoji} {pnl:+.2f} USDT
 
 ⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
+        except Exception as e:
+            logger.error(f"오늘 현황 조회 실패: {e}")
+            msg = f"""📊 <b>일일 거래 현황</b>
+
+⚠️ 데이터 조회 중 오류가 발생했습니다.
+
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
         await self._send_message(chat_id, msg)
 
     async def handle_profit(self, chat_id: int):
-        """수익 현황"""
-        # TODO: 실제 데이터 연동
-        msg = """💰 <b>수익 현황</b>
+        """수익 현황 (실제 DB 연동)"""
+        try:
+            async with await self._get_db_session() as session:
+                data = await self._get_profit_summary(session)
+
+                def fmt(val):
+                    emoji = "📈" if val >= 0 else "📉"
+                    return f"{emoji} {val:+.2f} USDT"
+
+                msg = f"""💰 <b>수익 현황</b>
 
 ━━━━━━━━━━━━━━━━━━━━━
-• 오늘: 📈 +0.00 USDT
-• 이번 주: 📈 +0.00 USDT
-• 이번 달: 📈 +0.00 USDT
-• 전체: 📈 +0.00 USDT
+• 오늘: {fmt(data["today"])}
+• 이번 주: {fmt(data["week"])}
+• 이번 달: {fmt(data["month"])}
+• 전체: {fmt(float(data["total"]))}
 
-⏰ """ + datetime.now().strftime("%H:%M:%S")
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
+        except Exception as e:
+            logger.error(f"수익 조회 실패: {e}")
+            msg = f"""💰 <b>수익 현황</b>
+
+⚠️ 데이터 조회 중 오류가 발생했습니다.
+
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
         await self._send_message(chat_id, msg)
 
     async def handle_balance(self, chat_id: int):
-        """잔고 조회"""
-        # TODO: 실제 데이터 연동 (API 호출)
+        """잔고 조회 (안내 메시지)"""
+        # 잔고는 사용자별 API 키가 필요하므로 안내 메시지만 표시
         msg = """💵 <b>잔고 현황</b>
 
 ━━━━━━━━━━━━━━━━━━━━━
-• 총 잔고: -- USDT
-• 가용 잔고: -- USDT
-• 사용 중 마진: -- USDT
-• 미실현 손익: -- USDT
+⚠️ 텔레그램에서 잔고를 조회하려면
+대시보드에서 Telegram Chat ID를 
+계정에 연동해야 합니다.
 
-💡 대시보드에서 API 키를 등록하세요.
+💡 대시보드 → 설정 → Telegram 연동
 
 ⏰ """ + datetime.now().strftime("%H:%M:%S")
         await self._send_message(chat_id, msg)
 
     async def handle_status(self, chat_id: int):
-        """봇 상태"""
-        # TODO: 실제 상태 연동
-        msg = """📈 <b>봇 상태</b>
+        """봇 상태 (실제 DB 연동)"""
+        try:
+            from ...database.models import BotInstance
+            from sqlalchemy import select
 
-🔴 상태: 정지됨
+            async with await self._get_db_session() as session:
+                # 실행 중인 봇 조회
+                result = await session.execute(
+                    select(BotInstance).where(BotInstance.is_running == True)
+                )
+                running_bots = result.scalars().all()
+
+                if running_bots:
+                    bot = running_bots[0]
+                    status_emoji = "🟢"
+                    status_text = "실행 중"
+                    bot_info = f"""• 봇 이름: {bot.name}
+• 심볼: {bot.symbol or "--"}"""
+                else:
+                    status_emoji = "🔴"
+                    status_text = "정지됨"
+                    bot_info = "• 실행 중인 봇 없음"
+
+                total_bots = (
+                    (
+                        await session.execute(
+                            select(BotInstance).where(BotInstance.is_active == True)
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+
+                msg = f"""📈 <b>봇 상태</b>
+
+{status_emoji} 상태: {status_text}
 
 ━━━━━━━━━━━━━━━━━━━━━
-• 전략: --
-• 타임프레임: --
-• 거래 금액: -- USDT
-• 레버리지: --x
+{bot_info}
+• 등록된 봇: {len(total_bots)}개
+• 실행 중: {len(running_bots)}개
 
-📭 현재 열린 포지션 없음
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
 
-⏰ """ + datetime.now().strftime("%H:%M:%S")
+        except Exception as e:
+            logger.error(f"상태 조회 실패: {e}")
+            msg = f"""📈 <b>봇 상태</b>
+
+⚠️ 상태 조회 중 오류가 발생했습니다.
+
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
         await self._send_message(chat_id, msg)
 
     async def handle_status_table(self, chat_id: int):
         """상태 테이블"""
-        msg = """📋 <b>포지션 상태표</b>
+        try:
+            from ...database.models import Position
+            from sqlalchemy import select
+
+            async with await self._get_db_session() as session:
+                result = await session.execute(select(Position))
+                positions = result.scalars().all()
+
+                if positions:
+                    pos_lines = []
+                    for p in positions[:5]:  # 최대 5개만 표시
+                        pnl = float(p.unrealized_pnl or 0)
+                        emoji = "📈" if pnl >= 0 else "📉"
+                        pos_lines.append(
+                            f"• {p.symbol} | {p.side} | {emoji} {pnl:+.2f}"
+                        )
+                    pos_text = "\n".join(pos_lines)
+                    if len(positions) > 5:
+                        pos_text += f"\n... 외 {len(positions) - 5}개"
+                else:
+                    pos_text = "현재 열린 포지션이 없습니다."
+
+                msg = f"""📋 <b>포지션 상태표</b>
 
 ━━━━━━━━━━━━━━━━━━━━━
-현재 열린 포지션이 없습니다.
+{pos_text}
 
-💡 봇을 시작하면 포지션이 표시됩니다.
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
 
-⏰ """ + datetime.now().strftime("%H:%M:%S")
+        except Exception as e:
+            logger.error(f"포지션 조회 실패: {e}")
+            msg = f"""📋 <b>포지션 상태표</b>
+
+⚠️ 조회 중 오류가 발생했습니다.
+
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
         await self._send_message(chat_id, msg)
 
     async def handle_performance(self, chat_id: int):
-        """성과 분석"""
-        msg = """📉 <b>성과 분석</b>
+        """성과 분석 (실제 DB 연동)"""
+        try:
+            from ...database.models import Trade
+            from sqlalchemy import select, func
+            from datetime import timedelta
+
+            async with await self._get_db_session() as session:
+                # 최근 30일 거래
+                start_date = datetime.now() - timedelta(days=30)
+                result = await session.execute(
+                    select(Trade).where(Trade.created_at >= start_date)
+                )
+                trades = result.scalars().all()
+
+                count = len(trades)
+                if count > 0:
+                    pnl_list = [float(t.pnl or 0) for t in trades]
+                    wins = sum(1 for p in pnl_list if p > 0)
+                    total_pnl = sum(pnl_list)
+                    max_profit = max(pnl_list) if pnl_list else 0
+                    max_loss = min(pnl_list) if pnl_list else 0
+                    win_rate = f"{(wins / count * 100):.1f}"
+                else:
+                    total_pnl = 0
+                    max_profit = 0
+                    max_loss = 0
+                    win_rate = "--"
+
+                pnl_emoji = "📈" if total_pnl >= 0 else "📉"
+
+                msg = f"""📉 <b>성과 분석</b>
 
 📊 최근 30일
 ━━━━━━━━━━━━━━━━━━━━━
-• 총 거래: 0회
-• 승률: --%
-• 총 손익: 📈 +0.00 USDT (0.00%)
-• 최대 이익: +0.00%
-• 최대 손실: 0.00%
-• 평균 보유시간: --
-• 최대 낙폭: 0.00%
+• 총 거래: {count}회
+• 승률: {win_rate}%
+• 총 손익: {pnl_emoji} {total_pnl:+.2f} USDT
+• 최대 이익: +{max_profit:.2f} USDT
+• 최대 손실: {max_loss:.2f} USDT
 
-⏰ """ + datetime.now().strftime("%H:%M:%S")
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
+        except Exception as e:
+            logger.error(f"성과 분석 실패: {e}")
+            msg = f"""📉 <b>성과 분석</b>
+
+⚠️ 데이터 조회 중 오류가 발생했습니다.
+
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
         await self._send_message(chat_id, msg)
 
     async def handle_count(self, chat_id: int):
-        """거래 횟수"""
-        msg = """🔢 <b>거래 횟수</b>
+        """거래 횟수 (실제 DB 연동)"""
+        try:
+            async with await self._get_db_session() as session:
+                data = await self._get_trade_counts(session)
+
+                msg = f"""🔢 <b>거래 횟수</b>
 
 ━━━━━━━━━━━━━━━━━━━━━
-• 오늘: 0회
-• 이번 주: 0회
-• 전체: 0회
+• 오늘: {data["today"]}회
+• 이번 주: {data["week"]}회
+• 전체: {data["total"]}회
 
-⏰ """ + datetime.now().strftime("%H:%M:%S")
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
+        except Exception as e:
+            logger.error(f"거래 횟수 조회 실패: {e}")
+            msg = f"""🔢 <b>거래 횟수</b>
+
+⚠️ 데이터 조회 중 오류가 발생했습니다.
+
+⏰ {datetime.now().strftime("%H:%M:%S")}"""
+
         await self._send_message(chat_id, msg)
 
     async def handle_start_bot(self, chat_id: int):

@@ -21,6 +21,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const BacktestingPage = lazy(() => import('./pages/BacktestingPage'));
+const BotManagement = lazy(() => import('./pages/BotManagement'));
 
 // Loading spinner component
 const PageLoader = () => (
@@ -56,76 +57,84 @@ function App() {
             <StrategyProvider>
               <Router>
                 <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  <Route path="/" element={<Login />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/oauth/callback" element={<OAuthCallback />} />
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    }
-                  />
+                  <Routes>
+                    <Route path="/" element={<Login />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/oauth/callback" element={<OAuthCallback />} />
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <ProtectedRoute>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  <Route
-                    path="/strategy"
-                    element={
-                      <ProtectedRoute>
-                        <Strategy />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/trading"
-                    element={
-                      <ProtectedRoute>
-                        <Trading />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/history"
-                    element={
-                      <ProtectedRoute>
-                        <TradingHistory />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/alerts"
-                    element={
-                      <ProtectedRoute>
-                        <Alerts />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/notifications"
-                    element={
-                      <ProtectedRoute>
-                        <Notifications />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/backtesting"
-                    element={
-                      <ProtectedRoute>
-                        <BacktestingPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/settings"
-                    element={
-                      <ProtectedRoute>
-                        <Settings />
-                      </ProtectedRoute>
-                    }
-                  />
-                </Routes>
+                    <Route
+                      path="/strategy"
+                      element={
+                        <ProtectedRoute>
+                          <Strategy />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/trading"
+                      element={
+                        <ProtectedRoute>
+                          <Trading />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/history"
+                      element={
+                        <ProtectedRoute>
+                          <TradingHistory />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/alerts"
+                      element={
+                        <ProtectedRoute>
+                          <Alerts />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/notifications"
+                      element={
+                        <ProtectedRoute>
+                          <Notifications />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/backtesting"
+                      element={
+                        <ProtectedRoute>
+                          <BacktestingPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/settings"
+                      element={
+                        <ProtectedRoute>
+                          <Settings />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/bots"
+                      element={
+                        <ProtectedRoute>
+                          <BotManagement />
+                        </ProtectedRoute>
+                      }
+                    />
+                  </Routes>
                 </Suspense>
               </Router>
               <ConnectionStatus />

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, memo } from 'react';
 import { createChart } from 'lightweight-charts';
-import { Modal, Input, Switch, Space, Typography } from 'antd';
-import { SearchOutlined, DownOutlined } from '@ant-design/icons';
+import { Modal, Input, Switch, Space, Typography, Button, ColorPicker, InputNumber } from 'antd';
+import { SearchOutlined, DownOutlined, DeleteOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -59,13 +59,16 @@ function TradingChart({
   data = [],
   symbol = 'BTC/USDT',
   height = 500,
-  timeframe,
-  availableTimeframes = [],
-  onTimeframeChange,
+  timeframe = '15m',  // 15m 고정
   availableSymbols = [],
   onSymbolChange,
   positions = [],
   tradeMarkers = [],
+  annotations = [],  // 차트 어노테이션 (수평선, 메모 등)
+  onAnnotationAdd,   // 어노테이션 추가 콜백
+  onAnnotationDelete, // 어노테이션 삭제 콜백
+  onAnnotationEdit,   // 어노테이션 편집 콜백
+  onAnnotationResetAlert, // 가격 알림 리셋 콜백
 }) {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -73,6 +76,10 @@ function TradingChart({
   const [coinModalOpen, setCoinModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showMarkers, setShowMarkers] = useState(true);
+  const [showAnnotations, setShowAnnotations] = useState(true);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, price: null, nearbyAnnotation: null });
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingAnnotation, setEditingAnnotation] = useState(null);
   const isMobile = useIsMobile();
 
   // Initialize chart once
@@ -191,6 +198,16 @@ function TradingChart({
     console.log('[TradingChart] Data updated successfully');
   }, [data, tradeMarkers, showMarkers]);
 
+  // FreqUI 스타일 마커 색상 (CHART_SIGNAL_MARKERS_GUIDE.md 참조)
+  const MARKER_COLORS = {
+    entryLong: '#00ff26',   // 롱 진입 - 밝은 녹색
+    entryShort: '#00ff26',  // 숏 진입 - 밝은 녹색 (방향은 화살표로 구분)
+    exitLong: '#faba25',    // 롱 청산 - 황금색
+    exitShort: '#faba25',   // 숏 청산 - 황금색
+    profitExit: '#00d26a',  // 익절 청산
+    lossExit: '#ff4757',    // 손절 청산
+  };
+
   // Create chart markers from trade data
   const createChartMarkers = (markers, candleData) => {
     if (!markers || markers.length === 0 || !candleData || candleData.length === 0) {
@@ -211,40 +228,56 @@ function TradingChart({
         });
 
         if (marker.type === 'entry') {
-          // Entry markers
+          // Entry markers - FreqUI 스타일
           if (marker.side === 'long') {
             return {
               time: closestCandle.time,
               position: 'belowBar',
-              color: '#0ecb81',
+              color: MARKER_COLORS.entryLong,
               shape: 'arrowUp',
-              text: isMobile ? 'L' : `L ${formatPriceShort(marker.price)}`,
+              text: isMobile ? 'L' : `▲ Long ${formatPriceShort(marker.price)}`,
               size: isMobile ? 1 : 2,
             };
           } else {
             return {
               time: closestCandle.time,
               position: 'aboveBar',
-              color: '#f6465d',
+              color: MARKER_COLORS.entryShort,
               shape: 'arrowDown',
-              text: isMobile ? 'S' : `S ${formatPriceShort(marker.price)}`,
+              text: isMobile ? 'S' : `▼ Short ${formatPriceShort(marker.price)}`,
               size: isMobile ? 1 : 2,
             };
           }
         } else if (marker.type === 'exit') {
           // Exit markers with P&L indicator
-          const pnlText = marker.pnl >= 0
-            ? `+${marker.pnl.toFixed(isMobile ? 0 : 2)}`
-            : marker.pnl.toFixed(isMobile ? 0 : 2);
-          const color = marker.pnl >= 0 ? '#0ecb81' : '#f6465d';
+          const pnl = marker.pnl || 0;
+          const pnlText = pnl >= 0
+            ? `+${pnl.toFixed(isMobile ? 0 : 2)}`
+            : pnl.toFixed(isMobile ? 0 : 2);
+          // 수익/손실에 따른 색상 (청산은 결과 기반)
+          const exitColor = pnl >= 0 ? MARKER_COLORS.profitExit : MARKER_COLORS.lossExit;
+          // 청산 사유 표시
+          const exitReason = marker.exit_reason || '';
+          const reasonText = exitReason ? ` (${exitReason})` : '';
 
           return {
             time: closestCandle.time,
             position: marker.side === 'long' ? 'aboveBar' : 'belowBar',
-            color: color,
+            color: exitColor,
             shape: 'square',
-            text: isMobile ? '✕' : `✕ ${pnlText}`,
+            text: isMobile ? `${pnl >= 0 ? '+' : ''}${pnl.toFixed(0)}` : `◆ ${pnlText}${reasonText}`,
             size: isMobile ? 1 : 2,
+          };
+        } else if (marker.type === 'signal') {
+          // 전략 시그널 마커 (아직 체결되지 않은 시그널)
+          const isLong = marker.signal === 'long' || marker.signal === 'buy';
+          return {
+            time: closestCandle.time,
+            position: isLong ? 'belowBar' : 'aboveBar',
+            color: '#5c7cfa',  // 시그널은 파란색
+            shape: isLong ? 'arrowUp' : 'arrowDown',
+            text: isMobile ? '!' : `Signal: ${marker.signal}`,
+            size: isMobile ? 0.5 : 1,
           };
         }
         return null;
@@ -255,33 +288,129 @@ function TradingChart({
     return chartMarkers;
   };
 
-  // Add position lines on chart
+  // Add annotation lines on chart (수평선, 가격 레벨 등)
   useEffect(() => {
-    if (!chartRef.current || !candlestickSeriesRef.current || !positions || positions.length === 0) {
+    if (!chartRef.current || !candlestickSeriesRef.current || !annotations || annotations.length === 0 || !showAnnotations) {
       return;
     }
 
-    // Create price lines for open positions
-    positions.forEach(pos => {
+    const annotationLines = [];
+
+    // 활성화된 어노테이션만 표시
+    const activeAnnotations = annotations.filter(a => a.is_active);
+
+    activeAnnotations.forEach(annotation => {
       try {
-        candlestickSeriesRef.current.createPriceLine({
-          price: pos.entry_price,
-          color: pos.side === 'long' ? '#0ecb81' : '#f6465d',
-          lineWidth: 2,
-          lineStyle: 2, // Dashed
-          axisLabelVisible: true,
-          title: isMobile
-            ? `${pos.side === 'long' ? 'L' : 'S'}`
-            : `${pos.side.toUpperCase()} @ ${formatPrice(pos.entry_price)}`,
-        });
+        // 수평선 타입 (hline, price_level)
+        if ((annotation.annotation_type === 'hline' || annotation.annotation_type === 'price_level') && annotation.price) {
+          const style = annotation.style || {};
+          const lineStyle = style.lineDash ? 2 : 0; // 점선 여부
+
+          const priceLine = candlestickSeriesRef.current.createPriceLine({
+            price: parseFloat(annotation.price),
+            color: style.color || '#1890ff',
+            lineWidth: style.lineWidth || 1,
+            lineStyle: lineStyle,
+            axisLabelVisible: true,
+            title: isMobile
+              ? (annotation.label || '')
+              : (annotation.label || `$${formatPrice(annotation.price)}`),
+          });
+          annotationLines.push(priceLine);
+        }
       } catch (e) {
-        console.warn('[TradingChart] Failed to create price line:', e);
+        console.warn('[TradingChart] Failed to create annotation line:', e);
       }
     });
 
     // Cleanup
     return () => {
-      // Price lines are automatically removed when series is cleared
+      annotationLines.forEach(line => {
+        try {
+          candlestickSeriesRef.current?.removePriceLine(line);
+        } catch (e) {
+          // 이미 제거된 경우 무시
+        }
+      });
+    };
+  }, [annotations, data, isMobile, showAnnotations]);
+
+  // Add position lines on chart (진입가 + 스탑로스 + 익절가)
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || !positions || positions.length === 0) {
+      return;
+    }
+
+    const priceLines = [];
+
+    // Create price lines for open positions
+    positions.forEach(pos => {
+      try {
+        // 1. 진입가 라인 (실선)
+        const entryLine = candlestickSeriesRef.current.createPriceLine({
+          price: pos.entry_price,
+          color: pos.side === 'long' ? '#0ecb81' : '#f6465d',
+          lineWidth: 2,
+          lineStyle: 0, // Solid
+          axisLabelVisible: true,
+          title: isMobile
+            ? `${pos.side === 'long' ? 'L' : 'S'}`
+            : `${pos.side.toUpperCase()} @ ${formatPrice(pos.entry_price)}`,
+        });
+        priceLines.push(entryLine);
+
+        // 2. 스탑로스 라인 (점선, 빨간색)
+        if (pos.stop_loss) {
+          const slLine = candlestickSeriesRef.current.createPriceLine({
+            price: pos.stop_loss,
+            color: '#ff4757',
+            lineWidth: 1,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: isMobile ? 'SL' : `SL ${formatPrice(pos.stop_loss)}`,
+          });
+          priceLines.push(slLine);
+        }
+
+        // 3. 익절가 라인 (점선, 녹색)
+        if (pos.take_profit) {
+          const tpLine = candlestickSeriesRef.current.createPriceLine({
+            price: pos.take_profit,
+            color: '#00d26a',
+            lineWidth: 1,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: isMobile ? 'TP' : `TP ${formatPrice(pos.take_profit)}`,
+          });
+          priceLines.push(tpLine);
+        }
+
+        // 4. 청산가 라인 (강제 청산 가격, 주황색 점선)
+        if (pos.liquidation_price) {
+          const liqLine = candlestickSeriesRef.current.createPriceLine({
+            price: pos.liquidation_price,
+            color: '#ff6b35',
+            lineWidth: 1,
+            lineStyle: 3, // Dotted
+            axisLabelVisible: true,
+            title: isMobile ? 'LIQ' : `LIQ ${formatPrice(pos.liquidation_price)}`,
+          });
+          priceLines.push(liqLine);
+        }
+      } catch (e) {
+        console.warn('[TradingChart] Failed to create price line:', e);
+      }
+    });
+
+    // Cleanup - 모든 라인 제거
+    return () => {
+      priceLines.forEach(line => {
+        try {
+          candlestickSeriesRef.current?.removePriceLine(line);
+        } catch (e) {
+          // 이미 제거된 경우 무시
+        }
+      });
     };
   }, [positions, data, isMobile]);
 
@@ -308,28 +437,8 @@ function TradingChart({
     setSearchTerm('');
   };
 
-  const timeframesDefault = [
-    { value: '1m', label: '1분' },
-    { value: '5m', label: '5분' },
-    { value: '15m', label: '15분' },
-    { value: '1h', label: '1시간' },
-    { value: '4h', label: '4시간' },
-    { value: '1d', label: '1일' },
-  ];
-
-  // Mobile-optimized timeframes (shorter labels)
-  const timeframesMobile = [
-    { value: '1m', label: '1m' },
-    { value: '5m', label: '5m' },
-    { value: '15m', label: '15m' },
-    { value: '1h', label: '1H' },
-    { value: '4h', label: '4H' },
-    { value: '1d', label: '1D' },
-  ];
-
-  const tfList = isMobile
-    ? timeframesMobile
-    : (availableTimeframes.length ? availableTimeframes : timeframesDefault);
+  // 타임프레임 15m 고정 - 라벨 표시용
+  const timeframeLabel = isMobile ? timeframe : (timeframe === '15m' ? '15분' : timeframe);
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
@@ -468,7 +577,7 @@ function TradingChart({
         )}
       </div>
 
-      {/* Second Row: Timeframe + Marker Toggle (Mobile Optimized) */}
+      {/* Second Row: Timeframe (Fixed 15m) + Marker Toggle */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -479,53 +588,62 @@ function TradingChart({
         borderRight: '1px solid #e5e7eb',
         background: '#fafafa',
       }}>
-        {/* Timeframe Selector */}
+        {/* Timeframe Fixed Label */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: isMobile ? '2px' : '4px',
-          background: '#f0f0f0',
-          padding: isMobile ? '2px' : '4px',
-          borderRadius: isMobile ? '8px' : '10px',
-          overflowX: 'auto',
-          WebkitOverflowScrolling: 'touch',
-          flex: 1,
+          gap: '8px',
         }}>
-          {tfList.map((tf) => (
-            <button
-              key={tf.value}
-              onClick={() => onTimeframeChange && onTimeframeChange(tf.value)}
-              style={{
-                padding: isMobile ? '6px 10px' : '8px 14px',
-                borderRadius: isMobile ? '6px' : '8px',
-                border: 'none',
-                background: timeframe === tf.value ? '#111827' : 'transparent',
-                color: timeframe === tf.value ? '#ffffff' : '#6b7280',
-                fontWeight: timeframe === tf.value ? 600 : 500,
-                fontSize: isMobile ? '11px' : '13px',
-                cursor: onTimeframeChange ? 'pointer' : 'default',
-                transition: 'all 0.15s ease',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              {tf.label}
-            </button>
-          ))}
+          <div style={{
+            padding: isMobile ? '6px 12px' : '8px 16px',
+            borderRadius: isMobile ? '6px' : '8px',
+            background: '#111827',
+            color: '#ffffff',
+            fontWeight: 600,
+            fontSize: isMobile ? '11px' : '13px',
+          }}>
+            {timeframeLabel}
+          </div>
+          <span style={{
+            fontSize: isMobile ? '10px' : '11px',
+            color: '#9ca3af',
+          }}>
+            고정
+          </span>
         </div>
 
-        {/* Marker Toggle */}
-        <Space size={4} style={{ flexShrink: 0 }}>
-          <Switch
-            size="small"
-            checked={showMarkers}
-            onChange={setShowMarkers}
-            style={{ background: showMarkers ? '#0ecb81' : undefined }}
-          />
-          {!isMobile && (
-            <Text style={{ fontSize: '11px', color: '#6b7280' }}>
-              마커 {tradeMarkers?.length || 0}
-            </Text>
+        {/* Marker & Annotation Toggles */}
+        <Space size={isMobile ? 8 : 16} style={{ flexShrink: 0 }}>
+          {/* Marker Toggle */}
+          <Space size={4}>
+            <Switch
+              size="small"
+              checked={showMarkers}
+              onChange={setShowMarkers}
+              style={{ background: showMarkers ? '#0ecb81' : undefined }}
+            />
+            {!isMobile && (
+              <Text style={{ fontSize: '11px', color: '#6b7280' }}>
+                마커 {tradeMarkers?.length || 0}
+              </Text>
+            )}
+          </Space>
+
+          {/* Annotation Toggle */}
+          {annotations && annotations.length > 0 && (
+            <Space size={4}>
+              <Switch
+                size="small"
+                checked={showAnnotations}
+                onChange={setShowAnnotations}
+                style={{ background: showAnnotations ? '#1890ff' : undefined }}
+              />
+              {!isMobile && (
+                <Text style={{ fontSize: '11px', color: '#6b7280' }}>
+                  주석 {annotations.filter(a => a.is_active).length}
+                </Text>
+              )}
+            </Space>
           )}
         </Space>
       </div>
@@ -533,6 +651,47 @@ function TradingChart({
       {/* Chart Container */}
       <div
         ref={chartContainerRef}
+        onContextMenu={(e) => {
+          if (isMobile) return; // 모바일에서는 context menu 비활성화
+
+          e.preventDefault();
+
+          // 차트에서 클릭한 가격 계산
+          const rect = chartContainerRef.current.getBoundingClientRect();
+          const y = e.clientY - rect.top;
+
+          // lightweight-charts의 coordinateToPrice 사용
+          if (candlestickSeriesRef.current && chartRef.current) {
+            try {
+              const price = candlestickSeriesRef.current.coordinateToPrice(y);
+              if (price && price > 0) {
+                // 클릭 위치 근처의 어노테이션 찾기 (가격 차이 1% 이내)
+                const threshold = price * 0.01;
+                const nearbyAnnotation = annotations.find(a =>
+                  a.is_active &&
+                  a.price &&
+                  Math.abs(parseFloat(a.price) - price) < threshold
+                );
+
+                setContextMenu({
+                  visible: true,
+                  x: e.clientX,
+                  y: e.clientY,
+                  price: price,
+                  nearbyAnnotation: nearbyAnnotation || null,
+                });
+              }
+            } catch (err) {
+              console.warn('[TradingChart] Failed to get price from coordinate:', err);
+            }
+          }
+        }}
+        onClick={() => {
+          // 다른 곳 클릭 시 context menu 닫기
+          if (contextMenu.visible) {
+            setContextMenu({ visible: false, x: 0, y: 0, price: null, nearbyAnnotation: null });
+          }
+        }}
         style={{
           width: '100%',
           height: `${height}px`,
@@ -543,7 +702,157 @@ function TradingChart({
         }}
       />
 
-      {/* Marker Legend - Compact for Mobile */}
+      {/* Context Menu for Annotations */}
+      {contextMenu.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            background: '#ffffff',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            zIndex: 1000,
+            minWidth: '180px',
+            overflow: 'hidden',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header with price */}
+          <div style={{
+            padding: '8px 12px',
+            borderBottom: '1px solid #f0f0f0',
+            fontSize: '11px',
+            color: '#9ca3af',
+            background: '#fafafa',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <span>${formatPrice(contextMenu.price)}</span>
+            {contextMenu.nearbyAnnotation && (
+              <span style={{
+                background: '#e6f7ff',
+                color: '#1890ff',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '10px',
+              }}>
+                주석 선택됨
+              </span>
+            )}
+          </div>
+
+          {/* 기존 어노테이션이 있을 때 - 편집/삭제 옵션 */}
+          {contextMenu.nearbyAnnotation && (
+            <>
+              <div
+                onClick={() => {
+                  setEditingAnnotation(contextMenu.nearbyAnnotation);
+                  setEditModalOpen(true);
+                  setContextMenu({ visible: false, x: 0, y: 0, price: null, nearbyAnnotation: null });
+                }}
+                style={{
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '13px',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ color: '#1890ff' }}>✎</span>
+                주석 편집
+              </div>
+              {onAnnotationDelete && (
+                <div
+                  onClick={() => {
+                    onAnnotationDelete(contextMenu.nearbyAnnotation.id);
+                    setContextMenu({ visible: false, x: 0, y: 0, price: null, nearbyAnnotation: null });
+                  }}
+                  style={{
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '13px',
+                    transition: 'background 0.15s',
+                    color: '#ff4d4f',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#fff1f0'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span>✕</span>
+                  주석 삭제
+                </div>
+              )}
+              <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
+            </>
+          )}
+
+          {/* 새 어노테이션 추가 옵션 */}
+          {onAnnotationAdd && (
+            <>
+              <div
+                onClick={() => {
+                  onAnnotationAdd({
+                    type: 'hline',
+                    price: contextMenu.price,
+                    label: `지지/저항 $${formatPrice(contextMenu.price)}`,
+                  });
+                  setContextMenu({ visible: false, x: 0, y: 0, price: null, nearbyAnnotation: null });
+                }}
+                style={{
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '13px',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ color: '#52c41a' }}>━</span>
+                수평선 추가
+              </div>
+              <div
+                onClick={() => {
+                  onAnnotationAdd({
+                    type: 'price_level',
+                    price: contextMenu.price,
+                    label: `알림 $${formatPrice(contextMenu.price)}`,
+                    alert_enabled: true,
+                  });
+                  setContextMenu({ visible: false, x: 0, y: 0, price: null, nearbyAnnotation: null });
+                }}
+                style={{
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '13px',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ color: '#ff4d4f' }}>┅</span>
+                가격 알림 추가
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Marker Legend - FreqUI 스타일 */}
       {showMarkers && tradeMarkers && tradeMarkers.length > 0 && (
         <div style={{
           position: 'absolute',
@@ -554,25 +863,232 @@ function TradingChart({
           borderRadius: isMobile ? '6px' : '8px',
           border: '1px solid #e5e7eb',
           display: 'flex',
-          gap: isMobile ? '8px' : '16px',
+          flexWrap: 'wrap',
+          gap: isMobile ? '6px' : '12px',
+          fontSize: isMobile ? '9px' : '11px',
+          color: '#6b7280',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          maxWidth: isMobile ? '200px' : 'none',
+        }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ color: '#00ff26', fontSize: isMobile ? '10px' : '12px' }}>▲</span>
+            {isMobile ? 'L' : '롱 진입'}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ color: '#00ff26', fontSize: isMobile ? '10px' : '12px' }}>▼</span>
+            {isMobile ? 'S' : '숏 진입'}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ color: '#00d26a', fontSize: isMobile ? '10px' : '12px' }}>◆</span>
+            {isMobile ? '+' : '익절'}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ color: '#ff4757', fontSize: isMobile ? '10px' : '12px' }}>◆</span>
+            {isMobile ? '-' : '손절'}
+          </span>
+        </div>
+      )}
+
+      {/* Position Lines Legend - 열린 포지션이 있을 때만 표시 */}
+      {positions && positions.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          bottom: isMobile ? '8px' : '16px',
+          right: isMobile ? '8px' : '16px',
+          background: 'rgba(255,255,255,0.95)',
+          padding: isMobile ? '4px 8px' : '8px 12px',
+          borderRadius: isMobile ? '6px' : '8px',
+          border: '1px solid #e5e7eb',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
           fontSize: isMobile ? '9px' : '11px',
           color: '#6b7280',
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <span style={{ color: '#0ecb81', fontSize: isMobile ? '10px' : '14px' }}>▲</span>
-            {isMobile ? 'L' : '롱 진입'}
+          <span style={{ fontWeight: 600, color: '#374151' }}>
+            {isMobile ? '포지션' : '열린 포지션'}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <span style={{ color: '#f6465d', fontSize: isMobile ? '10px' : '14px' }}>▼</span>
-            {isMobile ? 'S' : '숏 진입'}
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: '16px', height: '2px', background: '#0ecb81' }}></span>
+            {isMobile ? 'L' : '롱 진입가'}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <span style={{ fontSize: isMobile ? '10px' : '12px' }}>✕</span>
-            {isMobile ? '청산' : '청산'}
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: '16px', height: '2px', background: '#f6465d' }}></span>
+            {isMobile ? 'S' : '숏 진입가'}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: '16px', height: '1px', background: '#ff4757', borderStyle: 'dashed' }}></span>
+            SL
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: '16px', height: '1px', background: '#00d26a', borderStyle: 'dashed' }}></span>
+            TP
           </span>
         </div>
       )}
+
+      {/* Annotation Edit Modal */}
+      <Modal
+        title="주석 편집"
+        open={editModalOpen}
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditingAnnotation(null);
+        }}
+        footer={[
+          <Button
+            key="delete"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              if (onAnnotationDelete && editingAnnotation) {
+                onAnnotationDelete(editingAnnotation.id);
+                setEditModalOpen(false);
+                setEditingAnnotation(null);
+              }
+            }}
+          >
+            삭제
+          </Button>,
+          <Button key="cancel" onClick={() => {
+            setEditModalOpen(false);
+            setEditingAnnotation(null);
+          }}>
+            취소
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            onClick={async () => {
+              if (editingAnnotation) {
+                // 알림 리셋 요청이 있으면 먼저 처리
+                if (editingAnnotation._reset_alert && onAnnotationResetAlert) {
+                  await onAnnotationResetAlert(editingAnnotation.id);
+                }
+                // 일반 편집 저장
+                if (onAnnotationEdit) {
+                  onAnnotationEdit(editingAnnotation.id, {
+                    label: editingAnnotation.label,
+                    price: editingAnnotation.price,
+                    style: editingAnnotation.style,
+                    alert_enabled: editingAnnotation.alert_enabled,
+                  });
+                }
+                setEditModalOpen(false);
+                setEditingAnnotation(null);
+              }
+            }}
+          >
+            저장
+          </Button>,
+        ]}
+        width={400}
+        centered
+      >
+        {editingAnnotation && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Label */}
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>라벨</Text>
+              <Input
+                value={editingAnnotation.label || ''}
+                onChange={(e) => setEditingAnnotation({
+                  ...editingAnnotation,
+                  label: e.target.value
+                })}
+                placeholder="주석 라벨 입력"
+              />
+            </div>
+
+            {/* Price */}
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>가격</Text>
+              <InputNumber
+                value={editingAnnotation.price}
+                onChange={(value) => setEditingAnnotation({
+                  ...editingAnnotation,
+                  price: value
+                })}
+                style={{ width: '100%' }}
+                formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
+              />
+            </div>
+
+            {/* Color */}
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>색상</Text>
+              <ColorPicker
+                value={editingAnnotation.style?.color || '#1890ff'}
+                onChange={(color) => setEditingAnnotation({
+                  ...editingAnnotation,
+                  style: { ...editingAnnotation.style, color: color.toHexString() }
+                })}
+              />
+            </div>
+
+            {/* Alert Toggle (price_level only) */}
+            {editingAnnotation.annotation_type === 'price_level' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text strong>가격 알림</Text>
+                  <Switch
+                    checked={editingAnnotation.alert_enabled}
+                    onChange={(checked) => setEditingAnnotation({
+                      ...editingAnnotation,
+                      alert_enabled: checked
+                    })}
+                  />
+                </div>
+
+                {/* Alert triggered status */}
+                {editingAnnotation.alert_triggered && (
+                  <div style={{
+                    padding: '8px 12px',
+                    background: '#fff7e6',
+                    border: '1px solid #ffd591',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <span style={{ fontSize: '12px', color: '#ad6800' }}>
+                      ⚡ 이 알림은 이미 트리거되었습니다
+                    </span>
+                    <Button
+                      size="small"
+                      onClick={() => setEditingAnnotation({
+                        ...editingAnnotation,
+                        alert_triggered: false,
+                        _reset_alert: true // 저장 시 리셋 요청 플래그
+                      })}
+                    >
+                      리셋
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Type Info */}
+            <div style={{
+              padding: '8px 12px',
+              background: '#f5f5f5',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: '#666',
+            }}>
+              <span>타입: </span>
+              <span style={{ fontWeight: 600 }}>
+                {editingAnnotation.annotation_type === 'hline' ? '수평선' :
+                 editingAnnotation.annotation_type === 'price_level' ? '가격 알림' :
+                 editingAnnotation.annotation_type}
+              </span>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Coin Selection Modal */}
       <Modal
@@ -721,3 +1237,5 @@ function TradingChart({
     </div>
   );
 }
+
+export default TradingChart;

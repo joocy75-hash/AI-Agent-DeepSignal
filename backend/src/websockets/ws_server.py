@@ -221,6 +221,32 @@ class WebSocketManager:
             },
         )
 
+    @staticmethod
+    async def send_grid_order_update(user_id: int, order_data: dict):
+        """그리드 주문 상태 업데이트 (NEW - Grid Bot)"""
+        if "grid_order" in subscriptions.get(user_id, set()):
+            await WebSocketManager.broadcast_to_user(
+                user_id,
+                {
+                    "type": "grid_order_update",
+                    "data": order_data,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                },
+            )
+
+    @staticmethod
+    async def send_grid_cycle_complete(user_id: int, cycle_data: dict):
+        """그리드 사이클 완료 알림 (매도 체결 시) (NEW - Grid Bot)"""
+        if "grid_order" in subscriptions.get(user_id, set()):
+            await WebSocketManager.broadcast_to_user(
+                user_id,
+                {
+                    "type": "grid_cycle_complete",
+                    "data": cycle_data,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                },
+            )
+
 
 async def heartbeat_sender(user_id: int, conn_state: ConnectionState):
     """

@@ -3,6 +3,7 @@ JWT 인증 유틸리티
 
 실사용자 20명 규모에 맞춘 JWT 기반 인증 시스템.
 """
+
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -20,7 +21,19 @@ security = HTTPBearer()
 
 
 class JWTAuth:
-    """JWT 인증 헬퍼 클래스"""
+    """
+    JWT 인증 헬퍼 클래스
+
+    보안 구조:
+    - Access Token: 짧은 유효기간 (1시간), API 인증에 사용
+    - Refresh Token: 긴 유효기간 (7일), Access Token 갱신에 사용
+    """
+
+    # Refresh Token 기본 유효기간 (7일)
+    REFRESH_TOKEN_EXPIRES_DAYS = 7
+
+    # Access Token 기본 유효기간 (1시간)
+    ACCESS_TOKEN_EXPIRES_HOURS = 1
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -33,13 +46,15 @@ class JWTAuth:
         return pwd_context.hash(password)
 
     @staticmethod
-    def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(
+        data: dict, expires_delta: Optional[timedelta] = None
+    ) -> str:
         """
         JWT Access Token 생성
 
         Args:
             data: 토큰에 포함할 데이터 (user_id, email 등)
-            expires_delta: 만료 시간 (기본: 24시간)
+            expires_delta: 만료 시간 (기본: 설정값 또는 1시간)
 
         Returns:
             JWT 토큰 문자열
@@ -49,14 +64,63 @@ class JWTAuth:
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(seconds=settings.jwt_expires_seconds)
+            # 설정값이 있으면 사용, 없으면 기본 1시간
+            if settings.jwt_expires_seconds:
+                expire = datetime.utcnow() + timedelta(
+                    seconds=settings.jwt_expires_seconds
+                )
+            else:
+                expire = datetime.utcnow() + timedelta(
+                    hours=JWTAuth.ACCESS_TOKEN_EXPIRES_HOURS
+                )
 
-        to_encode.update({"exp": expire})
+        to_encode.update(
+            {
+                "exp": expire,
+                "type": "access",  # 토큰 타입 명시
+            }
+        )
 
         encoded_jwt = jwt.encode(
-            to_encode,
-            settings.jwt_secret,
-            algorithm=settings.jwt_algorithm
+            to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm
+        )
+
+        return encoded_jwt
+
+    @staticmethod
+    def create_refresh_token(
+        data: dict, expires_delta: Optional[timedelta] = None
+    ) -> str:
+        """
+        JWT Refresh Token 생성
+
+        Access Token을 갱신하는 데 사용되는 장기 토큰입니다.
+
+        Args:
+            data: 토큰에 포함할 데이터 (user_id 필수)
+            expires_delta: 만료 시간 (기본: 7일)
+
+        Returns:
+            JWT Refresh 토큰 문자열
+        """
+        to_encode = data.copy()
+
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(
+                days=JWTAuth.REFRESH_TOKEN_EXPIRES_DAYS
+            )
+
+        to_encode.update(
+            {
+                "exp": expire,
+                "type": "refresh",  # 토큰 타입 명시
+            }
+        )
+
+        encoded_jwt = jwt.encode(
+            to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm
         )
 
         return encoded_jwt
@@ -77,9 +141,7 @@ class JWTAuth:
         """
         try:
             payload = jwt.decode(
-                token,
-                settings.jwt_secret,
-                algorithms=[settings.jwt_algorithm]
+                token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
             )
             return payload
         except JWTError:
@@ -89,16 +151,100 @@ class JWTAuth:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    @staticmethod
+    def decode_refresh_token(token: str) -> dict:
+        """
+        Refresh Token 디코딩 및 검증
+
+        Args:
+            token: JWT Refresh 토큰 문자열
+
+        Returns:
+            토큰 페이로드 (user_id 등)
+
+        Raises:
+            HTTPException: 토큰이 유효하지 않거나 refresh 타입이 아닌 경우
+        """
+        try:
+            payload = jwt.decode(
+                token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+            )
+
+            # Refresh Token 타입 검증
+            if payload.get("type") != "refresh":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token type. Refresh token required.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+            return payload
+
+        except JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    @staticmethod
+    def refresh_access_token(refresh_token: str) -> tuple:
+        """
+        Refresh Token을 사용하여 새 Access Token 발급
+
+        Args:
+            refresh_token: 유효한 Refresh Token
+
+        Returns:
+            tuple: (new_access_token, new_refresh_token)
+            - new_refresh_token은 남은 유효기간이 1일 미만일 때만 갱신
+
+        Raises:
+            HTTPException: Refresh Token이 유효하지 않은 경우
+        """
+        payload = JWTAuth.decode_refresh_token(refresh_token)
+
+        user_id = payload.get("user_id")
+        email = payload.get("email")
+        role = payload.get("role", "user")
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token: missing user_id",
+            )
+
+        # 새 Access Token 생성
+        new_access_token = JWTAuth.create_access_token(
+            data={"user_id": user_id, "email": email, "role": role}
+        )
+
+        # Refresh Token 남은 유효기간 확인
+        exp_timestamp = payload.get("exp", 0)
+        exp_datetime = datetime.fromtimestamp(exp_timestamp)
+        remaining = exp_datetime - datetime.utcnow()
+
+        # 남은 유효기간이 1일 미만이면 새 Refresh Token도 발급
+        if remaining < timedelta(days=1):
+            new_refresh_token = JWTAuth.create_refresh_token(
+                data={"user_id": user_id, "email": email, "role": role}
+            )
+        else:
+            new_refresh_token = None  # 기존 토큰 유지
+
+        return new_access_token, new_refresh_token
+
 
 class TokenData:
     """토큰에서 추출한 사용자 정보"""
+
     def __init__(self, user_id: int, email: str):
         self.user_id = user_id
         self.email = email
 
 
 def get_current_user_id(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> int:
     """
     JWT 토큰에서 현재 사용자 ID 추출
@@ -132,7 +278,7 @@ def get_current_user_id(
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> TokenData:
     """
     JWT 토큰에서 현재 사용자 정보 추출 (전체)
@@ -172,7 +318,7 @@ def get_current_user(
 
 # Optional: 선택적 인증 (토큰이 있으면 검증, 없어도 OK)
 def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Optional[int]:
     """
     선택적 인증 - 토큰이 있으면 검증, 없으면 None 반환

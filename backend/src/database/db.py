@@ -82,6 +82,13 @@ async def lifespan(app):
     print("✅ Alert scheduler started")
     logger.info("✅ Alert scheduler started")
 
+    # Start price alert service (for chart annotations)
+    from ..services.price_alert_service import price_alert_service
+
+    await price_alert_service.start()
+    print("✅ Price alert service started")
+    logger.info("✅ Price alert service started")
+
     # Start Telegram bot handler (for responding to button clicks)
     from ..services.telegram.bot_handler import start_telegram_bot
 
@@ -97,6 +104,12 @@ async def lifespan(app):
     finally:
         # Shutdown
         logger.info("🛑 Shutting down application...")
+
+        # Stop price alert service
+        from ..services.price_alert_service import price_alert_service
+
+        await price_alert_service.stop()
+        logger.info("✅ Price alert service stopped")
 
         # Close cache manager
         from ..utils.cache_manager import cache_manager

@@ -96,7 +96,7 @@ class Settings(BaseModel):
     database_url: str = os.getenv(
         "DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/trading"
     )
-    jwt_secret: str = os.getenv("JWT_SECRET", "change_me")
+    jwt_secret: str = os.getenv("JWT_SECRET", "")  # ⚠️ 프로덕션에서 반드시 설정 필요
     jwt_algorithm: str = "HS256"
     jwt_expires_seconds: int = 60 * 60 * 24
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")

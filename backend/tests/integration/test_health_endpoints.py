@@ -1,6 +1,7 @@
 """
 Integration tests for health check endpoints (Phase 5).
 """
+
 import pytest
 from httpx import AsyncClient
 
@@ -47,9 +48,10 @@ class TestHealthEndpoints:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["status"] == "ready"
+        assert data["ready"] is True
         assert "checks" in data
         assert "database" in data["checks"]
+        assert data["checks"]["database"] is True
 
     @pytest.mark.asyncio
     async def test_health_check_live(self, async_client: AsyncClient):
@@ -59,7 +61,7 @@ class TestHealthEndpoints:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["status"] == "alive"
+        assert data["alive"] is True
         assert "timestamp" in data
 
 

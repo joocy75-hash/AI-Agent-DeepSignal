@@ -603,78 +603,181 @@ class GridBotRunner:
 
 ---
 
-## 📱 프론트엔드 설계
+## 📱 프론트엔드 설계 ✅ 구현 완료 (2025-12-12)
 
-### 1. 새로운 페이지: BotManagement.jsx
+### 1. 새로운 페이지: BotManagement.jsx ✅
+
+**파일**: `frontend/src/pages/BotManagement.jsx` (427 lines)
+
+**주요 기능:**
+
+- 통계 요약 카드 (총 봇, 실행 중, 총 PNL, 평균 승률)
+- AllocationBar 잔고 할당 시각화
+- BotCard 그리드 레이아웃
+- 전체 시작/중지 버튼
+- 모달 관리 (통계, 편집)
+- 반응형 디자인 (모바일/데스크톱)
+- 다크 테마 UI (비트겟 스타일)
 
 ```jsx
-// 봇 관리 페이지 구조
+// 실제 구현된 구조
 export default function BotManagement() {
     const [bots, setBots] = useState([]);
     const [totalAllocation, setTotalAllocation] = useState(0);
+    const [availableAllocation, setAvailableAllocation] = useState(100);
+    const [runningCount, setRunningCount] = useState(0);
+    const [summary, setSummary] = useState(null);
+    
+    // 모달 상태
+    const [statsModal, setStatsModal] = useState({ open: false, botId: null });
+    const [editModal, setEditModal] = useState({ open: false, bot: null });
     
     return (
-        <div className="bot-management">
-            {/* 잔고 할당 시각화 바 */}
-            <AllocationBar 
-                bots={bots}
-                total={totalAllocation}
-            />
+        <div style={{ background: '#0d0d14', minHeight: 'calc(100vh - 64px)' }}>
+            {/* 헤더: 제목 + 전체 시작/중지 버튼 */}
+            
+            {/* 통계 요약 카드 (4개) */}
+            <Row gutter={[16, 16]}>
+                <Col xs={12} sm={6}><Card>총 봇</Card></Col>
+                <Col xs={12} sm={6}><Card>실행 중</Card></Col>
+                <Col xs={12} sm={6}><Card>총 손익</Card></Col>
+                <Col xs={12} sm={6}><Card>평균 승률</Card></Col>
+            </Row>
+            
+            {/* 잔고 할당 시각화 */}
+            <AllocationBar bots={bots} totalAllocation={totalAllocation} />
             
             {/* 봇 카드 그리드 */}
             <Row gutter={[16, 16]}>
                 {bots.map(bot => (
-                    <Col xs={24} md={12} lg={8} key={bot.id}>
-                        <BotCard bot={bot} />
+                    <Col xs={24} sm={12} lg={8} xl={6} key={bot.id}>
+                        <BotCard
+                            bot={bot}
+                            onStart={handleStartBot}
+                            onStop={handleStopBot}
+                            onEdit={handleEditBot}
+                            onDelete={handleDeleteBot}
+                            onViewStats={handleViewStats}
+                        />
                     </Col>
                 ))}
                 
-                {/* 새 봇 추가 */}
-                {totalAllocation < 100 && (
-                    <Col xs={24} md={12} lg={8}>
+                {/* 새 봇 추가 카드 */}
+                {availableAllocation > 0 && (
+                    <Col xs={24} sm={12} lg={8} xl={6}>
                         <AddBotCard 
-                            maxAllocation={100 - totalAllocation}
+                            maxAllocation={availableAllocation}
+                            strategies={strategies}
+                            onCreate={handleCreateBot}
                         />
                     </Col>
                 )}
             </Row>
+            
+            {/* 모달들 */}
+            <BotStatsModal ... />
+            <EditBotModal ... />
         </div>
     );
 }
 ```
 
-### 2. API 클라이언트: botInstances.js
+### 2. 봇 컴포넌트들 ✅
+
+**폴더**: `frontend/src/components/bot/`
+
+| 파일 | 줄 수 | 설명 |
+|------|------|------|
+| `AllocationBar.jsx` | 140 | 잔고 할당 시각화 바 (색상별 봇 구분, 툴팁, 범례) |
+| `BotCard.jsx` | 309 | 봇 카드 (상태 표시, PNL, 승률, 액션 버튼) |
+| `AddBotCard.jsx` | 294 | 봇 추가 카드 + 생성 모달 (타입 선택, 설정 입력) |
+| `BotStatsModal.jsx` | 200+ | 봇 상세 통계 모달 (API 호출, 통계 표시) |
+| `EditBotModal.jsx` | 200+ | 봇 설정 편집 모달 (폼 프리필, 수정 저장) |
+
+**BotCard 주요 기능:**
+
+- 봇 상태 표시 (running: 녹색 글로우, stopped: 회색)
+- 봇 타입 태그 (AI 추세 / 그리드)
+- 통계 표시: PNL, 승률, 총 거래 수, 레버리지
+- 액션 버튼: 시작/중지, 편집, 통계, 삭제
+- 로딩 상태 처리
+
+**AddBotCard 폼 필드:**
+
+- 봇 타입 선택 (AI 추세 / 그리드)
+- 이름, 설명
+- 심볼 선택 (BTC, ETH, BNB, SOL, ADA, XRP, DOGE)
+- 전략 선택 (AI 봇 전용, StrategyContext에서 가져옴)
+- 잔고 할당 슬라이더 (0~maxAllocation%)
+- 최대 레버리지 (1~100x)
+- 최대 포지션 수 (1~20)
+- 손절/익절 비율 (%)
+- 텔레그램 알림 토글
+
+### 3. API 클라이언트: botInstances.js ✅
+
+**파일**: `frontend/src/api/botInstances.js` (90 lines)
 
 ```javascript
-export const botInstancesAPI = {
+// 실제 구현된 API 클라이언트
+import apiClient from './index';
+
+const botInstancesAPI = {
     // 목록 조회
-    list: () => apiClient.get('/bot-instances/list'),
+    list: async () => {
+        const response = await apiClient.get('/bot-instances/list');
+        return response.data;
+    },
     
-    // 생성
-    create: (data) => apiClient.post('/bot-instances/create', data),
-    
-    // 상세
-    get: (botId) => apiClient.get(`/bot-instances/${botId}`),
-    
-    // 수정
-    update: (botId, data) => apiClient.patch(`/bot-instances/${botId}`, data),
-    
-    // 삭제
-    delete: (botId) => apiClient.delete(`/bot-instances/${botId}`),
+    // CRUD
+    create: async (data) => { ... },
+    get: async (botId) => { ... },
+    update: async (botId, data) => { ... },
+    delete: async (botId) => { ... },
     
     // 시작/중지
-    start: (botId) => apiClient.post(`/bot-instances/${botId}/start`),
-    stop: (botId) => apiClient.post(`/bot-instances/${botId}/stop`),
-    
-    // 전체 시작/중지
-    startAll: () => apiClient.post('/bot-instances/start-all'),
-    stopAll: () => apiClient.post('/bot-instances/stop-all'),
+    start: async (botId) => { ... },
+    stop: async (botId) => { ... },
+    startAll: async () => { ... },
+    stopAll: async () => { ... },
     
     // 통계
-    stats: (botId) => apiClient.get(`/bot-instances/${botId}/stats`),
-    summary: () => apiClient.get('/bot-instances/stats/summary'),
+    getStats: async (botId) => { ... },
+    getSummary: async () => { ... },
 };
 
+export default botInstancesAPI;
+```
+
+### 4. 라우팅 및 메뉴 ✅
+
+**수정 파일:**
+
+- `frontend/src/App.jsx` - `/bots` 라우트 추가
+- `frontend/src/components/layout/MainLayout.jsx` - 사이드바에 "봇 관리" 메뉴 추가
+
+```jsx
+// App.jsx 라우트
+<Route
+  path="/bots"
+  element={
+    <ProtectedRoute>
+      <BotManagement />
+    </ProtectedRoute>
+  }
+/>
+
+// MainLayout.jsx 메뉴
+{
+    key: '/bots',
+    icon: <RobotOutlined />,
+    label: '봇 관리',
+}
+```
+
+### 5. 그리드 봇 API (미구현 - 대기)
+
+```javascript
 export const gridBotAPI = {
     configure: (botId, config) => apiClient.post(`/grid-bot/${botId}/configure`, config),
     getGrids: (botId) => apiClient.get(`/grid-bot/${botId}/grids`),

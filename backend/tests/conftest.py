@@ -5,7 +5,7 @@ import pytest
 import asyncio
 import os
 from typing import AsyncGenerator, Generator
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -96,10 +96,59 @@ def sync_session(sync_engine) -> Generator[Session, None, None]:
 async def async_client(async_engine) -> AsyncGenerator[AsyncClient, None]:
     """
     테스트용 HTTP 클라이언트 (FastAPI TestClient 대신 httpx AsyncClient 사용).
+    lifespan을 비활성화하여 테스트 환경에서 외부 서비스 의존성 제거.
     """
+    from contextlib import asynccontextmanager
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
     from src.database.db import get_session
+    from src.api import (
+        auth, bot, strategy, chart, annotations, health,
+        account, order, trades, positions, alerts,
+    )
+    from src.middleware.error_handler import register_exception_handlers
+    from unittest.mock import MagicMock, AsyncMock
 
-    app = create_app()
+    # 테스트용 앱 생성 (lifespan 없음 - 수동으로 state 설정)
+    app = FastAPI()
+
+    # 테스트용 state 설정
+    app.state.market_queue = asyncio.Queue()
+
+    # BotManager mock 설정
+    mock_runner = MagicMock()
+    mock_runner.is_running = MagicMock(return_value=False)
+    mock_runner.get_status = MagicMock(return_value=None)
+
+    app.state.bot_manager = MagicMock()
+    app.state.bot_manager.runner = mock_runner
+    app.state.bot_manager.start_bot = AsyncMock()
+    app.state.bot_manager.stop_bot = AsyncMock(return_value={"is_running": False})
+
+    # 예외 핸들러 등록
+    register_exception_handlers(app)
+
+    # 최소한의 미들웨어
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # 필요한 라우터만 등록
+    app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(bot.router)
+    app.include_router(strategy.router)
+    app.include_router(annotations.router)
+    app.include_router(chart.router)
+    app.include_router(account.router)
+    app.include_router(order.router)
+    app.include_router(trades.router)
+    app.include_router(positions.router)
+    app.include_router(alerts.router)
 
     # DB 세션 오버라이드
     async def override_get_session():
@@ -113,7 +162,9 @@ async def async_client(async_engine) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_session] = override_get_session
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    # raise_app_exceptions=False to handle app exceptions gracefully
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
     app.dependency_overrides.clear()

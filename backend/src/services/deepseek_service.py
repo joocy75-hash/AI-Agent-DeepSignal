@@ -1,6 +1,10 @@
 """
 DeepSeek AI 서비스
 전략 생성, 시장 분석 등에 AI를 활용합니다.
+
+모델 정보:
+- DeepSeek-V3.2 (2025년 최신 버전) 사용
+- API: https://api.deepseek.com/v1/chat/completions
 """
 
 import os
@@ -12,10 +16,15 @@ from src.config import settings
 class DeepSeekAIService:
     """DeepSeek AI 서비스 클래스"""
 
+    # DeepSeek 모델 버전 (2025년 기준 최신)
+    # deepseek-chat: DeepSeek-V3.2 호환 모델명
+    # 참고: https://www.deepseek.com/docs/api-reference
+    MODEL_VERSION = "deepseek-chat"
+
     def __init__(self):
         self.api_key = settings.deepseek_api_key
         self.base_url = "https://api.deepseek.com/v1"
-        self.model = "deepseek-chat"
+        self.model = self.MODEL_VERSION
 
     def _make_request(
         self,

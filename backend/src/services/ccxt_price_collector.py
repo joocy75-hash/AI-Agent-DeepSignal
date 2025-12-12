@@ -38,7 +38,14 @@ async def ccxt_price_collector(market_queue: asyncio.Queue, chart_queue: asyncio
             }
         })
 
-        symbols = ['BTC/USDT:USDT', 'ETH/USDT:USDT']
+        # 주요 심볼 목록 (프론트엔드의 Trading.jsx와 일치)
+        symbols = [
+            'BTC/USDT:USDT',
+            'ETH/USDT:USDT',
+            'BNB/USDT:USDT',
+            'SOL/USDT:USDT',
+            'ADA/USDT:USDT',
+        ]
 
         logger.info("🚀 CCXT price collector started")
         logger.info(f"📡 Watching symbols: {symbols}")
@@ -91,6 +98,16 @@ async def ccxt_price_collector(market_queue: asyncio.Queue, chart_queue: asyncio
                                     chart_queue.put_nowait(market_data)
                                 except:
                                     pass
+
+                        # Update price alert service for annotation alerts
+                        try:
+                            from .price_alert_service import price_alert_service
+                            await price_alert_service.update_price(
+                                simple_symbol, market_data['price']
+                            )
+                        except Exception as alert_err:
+                            # Non-critical - don't break the collector
+                            pass
 
                         # Log every 10th iteration to reduce noise
                         if iteration % 10 == 0:

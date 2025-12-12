@@ -31,12 +31,12 @@ def upgrade() -> None:
     op.add_column("users", sa.Column("oauth_provider", sa.String(20), nullable=True))
 
     op.add_column(
-        "users", sa.Column("oauth_id", sa.String(255), nullable=True, index=True)
+        "users", sa.Column("oauth_id", sa.String(255), nullable=True)
     )
 
     op.add_column("users", sa.Column("profile_image", sa.String(500), nullable=True))
 
-    # Create index for oauth_id
+    # Create index for oauth_id (index=True removed from add_column to avoid duplicate)
     op.create_index("ix_users_oauth_id", "users", ["oauth_id"])
 
 

@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { chartAPI } from '../api/chart';
 import { botAPI } from '../api/bot';
+import { annotationsAPI } from '../api/annotations';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
 import { useStrategies } from '../context/StrategyContext';
@@ -38,10 +39,12 @@ export default function Trading() {
 
     // Chart State
     const [symbol, setSymbol] = useState('BTCUSDT');
-    const [timeframe, setTimeframe] = useState('1m');
+    // 타임프레임 15m 고정 (코인별 단일 타임프레임 사용)
+    const timeframe = '15m';
     const [candles, setCandles] = useState([]);
     const [positions, setPositions] = useState([]);
     const [tradeMarkers, setTradeMarkers] = useState([]);
+    const [annotations, setAnnotations] = useState([]);
     const [chartLoading, setChartLoading] = useState(false);
     const [wsUpdateCallback, setWsUpdateCallback] = useState(null);
 
@@ -53,37 +56,87 @@ export default function Trading() {
     const [showStopConfirm, setShowStopConfirm] = useState(false);
 
     const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT'];
-    const timeframes = [
-        { value: '1m', label: '1분' },
-        { value: '5m', label: '5분' },
-        { value: '15m', label: '15분' },
-        { value: '1h', label: '1시간' },
-        { value: '4h', label: '4시간' },
-        { value: '1d', label: '1일' },
-    ];
 
     // Load Chart Data
     const loadChartData = useCallback(async () => {
         console.log(`[Trading] Loading chart data - Symbol: ${symbol}, Timeframe: ${timeframe}`);
         setChartLoading(true);
         try {
-            const [candleData, positionData, markersData] = await Promise.all([
+            const [candleData, positionData, markersData, annotationsData] = await Promise.all([
                 chartAPI.getCandles(symbol, 200, true, timeframe),
                 chartAPI.getCurrentPositions(symbol),
-                chartAPI.getPositionMarkers(symbol, 30) // 최근 30일 마커
+                chartAPI.getPositionMarkers(symbol, 30), // 최근 30일 마커
+                annotationsAPI.getAnnotations(symbol).catch(() => ({ annotations: [] })) // 실패해도 빈 배열
             ]);
             console.log(`[Trading] Received ${candleData.candles?.length || 0} candles for ${symbol} ${timeframe}`);
             console.log(`[Trading] Received ${markersData.markers?.length || 0} trade markers`);
+            console.log(`[Trading] Received ${annotationsData.annotations?.length || 0} annotations`);
             setCandles(candleData.candles || []);
             setPositions(positionData.positions || []);
             setTradeMarkers(markersData.markers || []);
+            setAnnotations(annotationsData.annotations || []);
         } catch (err) {
             console.error('[Trading] Chart load error:', err);
             message.error('차트 데이터 로드 실패');
         } finally {
             setChartLoading(false);
         }
-    }, [symbol, timeframe]);
+    }, [symbol]);  // timeframe은 15m 고정이므로 의존성에서 제외
+
+    // 어노테이션 추가 핸들러
+    const handleAnnotationAdd = useCallback(async (annotationData) => {
+        try {
+            const newAnnotation = await annotationsAPI.createAnnotation({
+                symbol: symbol,
+                annotation_type: annotationData.type,
+                label: annotationData.label,
+                price: annotationData.price,
+                alert_enabled: annotationData.alert_enabled || false,
+                style: { color: annotationData.type === 'price_level' ? '#ff4d4f' : '#52c41a' }
+            });
+            setAnnotations(prev => [...prev, newAnnotation]);
+            message.success('주석이 추가되었습니다');
+        } catch (err) {
+            console.error('[Trading] Annotation add error:', err);
+            message.error('주석 추가 실패');
+        }
+    }, [symbol]);
+
+    // 어노테이션 삭제 핸들러
+    const handleAnnotationDelete = useCallback(async (annotationId) => {
+        try {
+            await annotationsAPI.deleteAnnotation(annotationId);
+            setAnnotations(prev => prev.filter(a => a.id !== annotationId));
+            message.success('주석이 삭제되었습니다');
+        } catch (err) {
+            console.error('[Trading] Annotation delete error:', err);
+            message.error('주석 삭제 실패');
+        }
+    }, []);
+
+    // 어노테이션 편집 핸들러
+    const handleAnnotationEdit = useCallback(async (annotationId, updateData) => {
+        try {
+            const updated = await annotationsAPI.updateAnnotation(annotationId, updateData);
+            setAnnotations(prev => prev.map(a => a.id === annotationId ? updated : a));
+            message.success('주석이 수정되었습니다');
+        } catch (err) {
+            console.error('[Trading] Annotation edit error:', err);
+            message.error('주석 수정 실패');
+        }
+    }, []);
+
+    // 가격 알림 리셋 핸들러
+    const handleAnnotationResetAlert = useCallback(async (annotationId) => {
+        try {
+            const updated = await annotationsAPI.resetAlert(annotationId);
+            setAnnotations(prev => prev.map(a => a.id === annotationId ? updated : a));
+            message.success('가격 알림이 리셋되었습니다');
+        } catch (err) {
+            console.error('[Trading] Annotation reset alert error:', err);
+            message.error('알림 리셋 실패');
+        }
+    }, []);
 
     // Load Bot Data (전략 목록은 StrategyContext에서 전역 관리)
     const loadBotData = async () => {
@@ -123,11 +176,11 @@ export default function Trading() {
         console.log(`[Trading] Strategy list updated: ${strategies.length} active strategies available`);
     }, [lastUpdated, strategies, selectedStrategy]);
 
-    // Reload on symbol/timeframe change
+    // Reload on symbol change (timeframe is fixed at 15m)
     useEffect(() => {
         console.log(`[Trading] useEffect triggered - Symbol: ${symbol}, Timeframe: ${timeframe}`);
         loadChartData();
-    }, [symbol, timeframe, loadChartData]);
+    }, [symbol, loadChartData]);
 
     // WebSocket for real-time candle updates
     useEffect(() => {
@@ -150,6 +203,40 @@ export default function Trading() {
 
         return () => unsubscribe();
     }, [isConnected, symbol, subscribe, wsUpdateCallback]);
+
+    // WebSocket for price alerts
+    useEffect(() => {
+        if (!isConnected) return;
+
+        const unsubscribe = subscribe('price_alert_triggered', (data) => {
+            console.log('[Trading] Price alert triggered:', data);
+            const alertData = data.data;
+            const direction = alertData.direction === 'up' ? '상향 돌파' : '하향 돌파';
+
+            // 알림 표시
+            message.info({
+                content: (
+                    <span>
+                        🔔 <strong>{alertData.label || '가격 알림'}</strong><br />
+                        {alertData.symbol} {direction}<br />
+                        설정가: ${Number(alertData.alert_price).toLocaleString()}<br />
+                        현재가: ${Number(alertData.current_price).toLocaleString()}
+                    </span>
+                ),
+                duration: 8,
+                style: { marginTop: '20vh' },
+            });
+
+            // 트리거된 알림을 annotations 상태에서 업데이트
+            setAnnotations(prev => prev.map(a =>
+                a.id === alertData.id
+                    ? { ...a, alert_triggered: true }
+                    : a
+            ));
+        });
+
+        return () => unsubscribe();
+    }, [isConnected, subscribe]);
 
     // Bot Controls
     const handleStartBot = async () => {
@@ -309,13 +396,16 @@ export default function Trading() {
                                         symbol={symbol.replace('USDT', '/USDT')}
                                         positions={positions}
                                         tradeMarkers={tradeMarkers}
+                                        annotations={annotations}
                                         height={isMobile ? 300 : 500}
                                         timeframe={timeframe}
-                                        availableTimeframes={timeframes}
-                                        onTimeframeChange={setTimeframe}
                                         onCandleUpdate={handleCandleUpdateCallback}
                                         availableSymbols={symbols}
                                         onSymbolChange={setSymbol}
+                                        onAnnotationAdd={handleAnnotationAdd}
+                                        onAnnotationDelete={handleAnnotationDelete}
+                                        onAnnotationEdit={handleAnnotationEdit}
+                                        onAnnotationResetAlert={handleAnnotationResetAlert}
                                     />
                                 </>
                             )}

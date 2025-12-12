@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,17 +61,34 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
     """
     사용자 로그인 및 JWT 토큰 발급
 
+    🔒 보안 기능:
+    - Brute Force 방지: 5회 연속 실패 시 15분간 계정 잠금
+    - 2FA 지원: TOTP 기반 2단계 인증
+
     2FA가 활성화된 경우:
     1. 첫 번째 요청: email + password -> requires_2fa: true, user_id 반환
     2. 두 번째 요청: email + password + totp_code -> access_token 반환
     """
     from ..services.totp_service import totp_service
+    from ..services.login_security import login_security
+
+    # 🔒 Step 1: 계정 잠금 확인
+    (
+        is_allowed,
+        lockout_message,
+        remaining_seconds,
+    ) = await login_security.check_login_allowed(payload.email)
+
+    if not is_allowed:
+        raise AuthenticationError(lockout_message)
 
     result = await session.execute(select(User).where(User.email == payload.email))
     user = result.scalars().first()
 
     # 사용자가 존재하지 않는 경우
     if not user:
+        # 🔒 실패 기록 (사용자 존재 여부를 노출하지 않기 위해 동일한 에러 메시지)
+        await login_security.record_failed_attempt(payload.email)
         raise AuthenticationError("Invalid email or password")
 
     # 소셜 로그인 사용자가 비밀번호로 로그인 시도
@@ -85,6 +103,22 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
     if not user.password_hash or not JWTAuth.verify_password(
         payload.password, user.password_hash
     ):
+        # 🔒 Step 2: 실패 기록 및 잠금 처리
+        failed_count, is_locked = await login_security.record_failed_attempt(
+            payload.email
+        )
+
+        if is_locked:
+            raise AuthenticationError(
+                "로그인 시도가 너무 많습니다. 15분 후에 다시 시도해주세요."
+            )
+
+        remaining_attempts = 5 - failed_count
+        if remaining_attempts > 0 and remaining_attempts <= 2:
+            raise AuthenticationError(
+                f"Invalid email or password (남은 시도: {remaining_attempts}회)"
+            )
+
         raise AuthenticationError("Invalid email or password")
 
     # 계정 정지 확인
@@ -105,14 +139,24 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
         # 2FA 코드 검증
         secret = totp_service.decrypt_secret(user.totp_secret)
         if not secret or not totp_service.verify_totp(secret, payload.totp_code):
+            # 🔒 2FA 실패도 기록
+            await login_security.record_failed_attempt(payload.email)
             raise AuthenticationError("유효하지 않은 2FA 코드입니다")
 
-    # JWT 토큰 생성 (user_id + email + role 포함)
-    token = JWTAuth.create_access_token(
-        data={"user_id": user.id, "email": user.email, "role": user.role or "user"}
-    )
+    # 🔒 Step 3: 로그인 성공 - 실패 기록 초기화
+    await login_security.record_successful_login(payload.email)
 
-    return TokenResponse(access_token=token, token_type="bearer")
+    # JWT 토큰 생성 (user_id + email + role 포함)
+    user_data = {"user_id": user.id, "email": user.email, "role": user.role or "user"}
+
+    access_token = JWTAuth.create_access_token(data=user_data)
+    refresh_token = JWTAuth.create_refresh_token(data=user_data)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
 
 
 @router.get("/users")
@@ -179,3 +223,42 @@ async def change_password(
     except Exception as e:
         await session.rollback()
         raise AuthenticationError(f"비밀번호 변경 실패: {str(e)}")
+
+
+class RefreshTokenRequest(BaseModel):
+    """Refresh Token 요청"""
+
+    refresh_token: str
+
+
+@router.post("/refresh")
+async def refresh_token(payload: RefreshTokenRequest):
+    """
+    Refresh Token을 사용하여 새 Access Token 발급
+
+    🔒 보안 기능:
+    - Refresh Token 유효성 검증
+    - Access Token 갱신 (1시간 유효)
+    - Refresh Token 만료 임박 시 자동 갱신 (남은 시간 1일 미만)
+
+    Args:
+        refresh_token: 유효한 Refresh Token
+
+    Returns:
+        access_token: 새 Access Token
+        refresh_token: 새 Refresh Token (선택적, 만료 임박 시에만)
+        token_type: "bearer"
+    """
+    try:
+        new_access, new_refresh = JWTAuth.refresh_access_token(payload.refresh_token)
+
+        response = {"access_token": new_access, "token_type": "bearer"}
+
+        # Refresh Token이 갱신된 경우에만 포함
+        if new_refresh:
+            response["refresh_token"] = new_refresh
+
+        return response
+
+    except Exception as e:
+        raise AuthenticationError(f"토큰 갱신 실패: {str(e)}")

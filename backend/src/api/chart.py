@@ -110,9 +110,21 @@ async def get_candles(
                 detail=f"No market data available for {symbol}. Please ensure market data service is running.",
             )
 
+        # Timeframe을 밀리초로 변환
+        timeframe_ms_map = {
+            "1m": 60 * 1000,
+            "5m": 5 * 60 * 1000,
+            "15m": 15 * 60 * 1000,
+            "1h": 60 * 60 * 1000,
+            "4h": 4 * 60 * 60 * 1000,
+            "1d": 24 * 60 * 60 * 1000,
+        }
+        timeframe_ms = timeframe_ms_map.get(timeframe, 60 * 1000)
+
         return {
             "symbol": symbol.upper(),
             "interval": timeframe,
+            "timeframe_ms": timeframe_ms,
             "candles": candles,
             "count": len(candles),
         }
@@ -180,6 +192,8 @@ async def get_position_markers(
                     "price": float(trade.entry_price),
                     "qty": float(trade.qty),
                     "trade_id": trade.id,
+                    "enter_tag": trade.enter_tag if trade.enter_tag else None,
+                    "order_tag": trade.order_tag if trade.order_tag else None,
                 }
             )
 
@@ -201,6 +215,7 @@ async def get_position_markers(
                         "exit_reason": trade.exit_reason.value
                         if trade.exit_reason
                         else "manual",
+                        "exit_tag": trade.exit_tag if trade.exit_tag else None,
                         "trade_id": trade.id,
                     }
                 )

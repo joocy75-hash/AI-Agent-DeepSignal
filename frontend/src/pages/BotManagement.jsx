@@ -1,0 +1,748 @@
+/**
+ * BotManagement Page
+ *
+ * 다중 봇 관리 페이지 - AI 봇 + 그리드 봇 통합 관리
+ *
+ * 기능:
+ * - 탭 기반 봇 타입 분류 (AI 추세 / 그리드)
+ * - 봇 목록 카드 그리드 표시
+ * - 잔고 할당 시각화 바
+ * - 전체 봇 시작/중지
+ * - 봇 생성/수정/삭제
+ * - 봇별 상세 통계
+ */
+
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+    Row,
+    Col,
+    Typography,
+    Button,
+    Space,
+    message,
+    Card,
+    Statistic,
+    Tabs,
+    Spin,
+    Badge,
+} from 'antd';
+import {
+    RobotOutlined,
+    PlayCircleOutlined,
+    PauseCircleOutlined,
+    ReloadOutlined,
+    DashboardOutlined,
+    TrophyOutlined,
+    RiseOutlined,
+    FallOutlined,
+    ThunderboltOutlined,
+    LineChartOutlined,
+    PlusOutlined,
+} from '@ant-design/icons';
+
+import botInstancesAPI from '../api/botInstances';
+import { useStrategies } from '../context/StrategyContext';
+
+// AI 봇 컴포넌트
+import AllocationBar from '../components/bot/AllocationBar';
+import BotCard from '../components/bot/BotCard';
+import AddBotCard from '../components/bot/AddBotCard';
+import BotStatsModal from '../components/bot/BotStatsModal';
+import EditBotModal from '../components/bot/EditBotModal';
+
+// 그리드 봇 컴포넌트
+import GridBotCard from '../components/grid/GridBotCard';
+import CreateGridBotModal from '../components/grid/CreateGridBotModal';
+
+const { Title, Text } = Typography;
+
+export default function BotManagement() {
+    // State
+    const [bots, setBots] = useState([]);
+    const [totalAllocation, setTotalAllocation] = useState(0);
+    const [availableAllocation, setAvailableAllocation] = useState(100);
+    const [runningCount, setRunningCount] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState('all');
+
+    // 전략 컨텍스트
+    const { getActiveStrategies } = useStrategies();
+    const strategies = getActiveStrategies();
+
+    // 모달 상태
+    const [statsModal, setStatsModal] = useState({ open: false, botId: null, botName: null });
+    const [editModal, setEditModal] = useState({ open: false, bot: null });
+    const [gridBotModal, setGridBotModal] = useState({ open: false, bot: null });
+
+    // 통계 요약
+    const [summary, setSummary] = useState(null);
+
+    // 화면 크기 감지
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // 봇 필터링
+    const filteredBots = useMemo(() => {
+        if (activeTab === 'all') return bots;
+        if (activeTab === 'ai_trend') return bots.filter((b) => b.bot_type === 'ai_trend');
+        if (activeTab === 'grid') return bots.filter((b) => b.bot_type === 'grid');
+        return bots;
+    }, [bots, activeTab]);
+
+    // AI 봇과 그리드 봇 카운트
+    const botCounts = useMemo(() => {
+        const aiCount = bots.filter((b) => b.bot_type === 'ai_trend').length;
+        const gridCount = bots.filter((b) => b.bot_type === 'grid').length;
+        const aiRunning = bots.filter((b) => b.bot_type === 'ai_trend' && b.is_running).length;
+        const gridRunning = bots.filter((b) => b.bot_type === 'grid' && b.is_running).length;
+        return { aiCount, gridCount, aiRunning, gridRunning };
+    }, [bots]);
+
+    // 봇 목록 로드
+    const loadBots = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await botInstancesAPI.list();
+            setBots(response.bots || []);
+            setTotalAllocation(response.total_allocation || 0);
+            setAvailableAllocation(response.available_allocation || 100);
+            setRunningCount(response.running_count || 0);
+        } catch (err) {
+            console.error('봇 목록 로드 실패:', err);
+            message.error('봇 목록을 불러오지 못했습니다');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // 통계 요약 로드
+    const loadSummary = useCallback(async () => {
+        try {
+            const response = await botInstancesAPI.getSummary();
+            setSummary(response);
+        } catch (err) {
+            console.error('통계 요약 로드 실패:', err);
+        }
+    }, []);
+
+    // 초기 로드
+    useEffect(() => {
+        loadBots();
+        loadSummary();
+    }, [loadBots, loadSummary]);
+
+    // 봇 생성
+    const handleCreateBot = async (data) => {
+        await botInstancesAPI.create(data);
+        await loadBots();
+    };
+
+    // 봇 시작
+    const handleStartBot = async (botId) => {
+        const response = await botInstancesAPI.start(botId);
+        message.success(response.message || '봇이 시작되었습니다');
+        await loadBots();
+    };
+
+    // 봇 중지
+    const handleStopBot = async (botId) => {
+        const response = await botInstancesAPI.stop(botId);
+        message.success(response.message || '봇이 중지되었습니다');
+        await loadBots();
+    };
+
+    // 봇 수정
+    const handleUpdateBot = async (botId, data) => {
+        await botInstancesAPI.update(botId, data);
+        await loadBots();
+    };
+
+    // 봇 삭제
+    const handleDeleteBot = async (botId) => {
+        await botInstancesAPI.delete(botId);
+        await loadBots();
+    };
+
+    // 전체 시작
+    const handleStartAll = async () => {
+        setActionLoading(true);
+        try {
+            const response = await botInstancesAPI.startAll();
+            message.success(response.message || '모든 봇이 시작되었습니다');
+            await loadBots();
+        } catch (err) {
+            message.error(err.response?.data?.detail || '전체 시작 실패');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // 전체 중지
+    const handleStopAll = async () => {
+        setActionLoading(true);
+        try {
+            const response = await botInstancesAPI.stopAll();
+            message.success(response.message || '모든 봇이 중지되었습니다');
+            await loadBots();
+        } catch (err) {
+            message.error(err.response?.data?.detail || '전체 중지 실패');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // PNL 포맷
+    const formatPnl = (value) => {
+        if (!value || value === 0) return '$0';
+        const formatted = Math.abs(value).toFixed(2);
+        return value >= 0 ? `+$${formatted}` : `-$${formatted}`;
+    };
+
+    // 탭 아이템
+    const tabItems = [
+        {
+            key: 'all',
+            label: (
+                <Space>
+                    <DashboardOutlined />
+                    전체
+                    <Badge count={bots.length} style={{ backgroundColor: '#00A8FF' }} />
+                </Space>
+            ),
+        },
+        {
+            key: 'ai_trend',
+            label: (
+                <Space>
+                    <ThunderboltOutlined style={{ color: '#7C54FF' }} />
+                    AI 추세
+                    <Badge
+                        count={botCounts.aiCount}
+                        style={{ backgroundColor: '#7C54FF' }}
+                    />
+                </Space>
+            ),
+        },
+        {
+            key: 'grid',
+            label: (
+                <Space>
+                    <LineChartOutlined style={{ color: '#00C076' }} />
+                    그리드
+                    <Badge
+                        count={botCounts.gridCount}
+                        style={{ backgroundColor: '#00C076' }}
+                    />
+                </Space>
+            ),
+        },
+    ];
+
+    // 봇 카드 렌더링
+    const renderBotCard = (bot) => {
+        if (bot.bot_type === 'grid') {
+            return (
+                <GridBotCard
+                    key={bot.id}
+                    bot={bot}
+                    onStart={handleStartBot}
+                    onStop={handleStopBot}
+                    onEdit={(bot) => setGridBotModal({ open: true, bot })}
+                    onDelete={handleDeleteBot}
+                    onViewDetail={(botId) =>
+                        setStatsModal({
+                            open: true,
+                            botId,
+                            botName: bots.find((b) => b.id === botId)?.name,
+                        })
+                    }
+                />
+            );
+        }
+
+        return (
+            <BotCard
+                key={bot.id}
+                bot={bot}
+                onStart={handleStartBot}
+                onStop={handleStopBot}
+                onEdit={(bot) => setEditModal({ open: true, bot })}
+                onDelete={handleDeleteBot}
+                onViewStats={(botId) =>
+                    setStatsModal({
+                        open: true,
+                        botId,
+                        botName: bots.find((b) => b.id === botId)?.name,
+                    })
+                }
+            />
+        );
+    };
+
+    return (
+        <div
+            style={{
+                maxWidth: 1400,
+                margin: '0 auto',
+                background: '#0d0d14',
+                minHeight: 'calc(100vh - 64px)',
+                padding: isMobile ? '16px' : '24px 32px',
+            }}
+        >
+            {/* Page Header */}
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    flexWrap: 'wrap',
+                    gap: 16,
+                    marginBottom: 24,
+                }}
+            >
+                <div>
+                    <Title
+                        level={isMobile ? 3 : 2}
+                        style={{
+                            marginBottom: 4,
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                        }}
+                    >
+                        <RobotOutlined style={{ color: '#00A8FF' }} />
+                        봇 관리
+                    </Title>
+                    <Text style={{ color: 'rgba(255,255,255,0.5)' }}>
+                        AI 추세 봇과 그리드 봇을 생성하고 관리하세요
+                    </Text>
+                </div>
+
+                {/* 전체 제어 버튼 */}
+                <Space wrap>
+                    <Button
+                        icon={<ReloadOutlined />}
+                        onClick={() => {
+                            loadBots();
+                            loadSummary();
+                        }}
+                        loading={loading}
+                        style={{
+                            background: '#252538',
+                            border: 'none',
+                            color: '#fff',
+                            borderRadius: 8,
+                        }}
+                    >
+                        {!isMobile && '새로고침'}
+                    </Button>
+                    {runningCount > 0 ? (
+                        <Button
+                            danger
+                            icon={<PauseCircleOutlined />}
+                            onClick={handleStopAll}
+                            loading={actionLoading}
+                            style={{
+                                borderRadius: 8,
+                                fontWeight: 600,
+                            }}
+                        >
+                            전체 중지
+                        </Button>
+                    ) : (
+                        <Button
+                            type="primary"
+                            icon={<PlayCircleOutlined />}
+                            onClick={handleStartAll}
+                            loading={actionLoading}
+                            disabled={bots.length === 0}
+                            style={{
+                                background:
+                                    'linear-gradient(135deg, #00C076 0%, #00A060 100%)',
+                                border: 'none',
+                                borderRadius: 8,
+                                fontWeight: 600,
+                            }}
+                        >
+                            전체 시작
+                        </Button>
+                    )}
+                </Space>
+            </div>
+
+            {/* 통계 요약 카드 */}
+            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                <Col xs={12} sm={6}>
+                    <Card
+                        style={{
+                            background:
+                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 12,
+                        }}
+                        styles={{ body: { padding: '16px 20px' } }}
+                    >
+                        <Statistic
+                            title={
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.5)',
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    총 봇
+                                </Text>
+                            }
+                            value={summary?.total_bots || bots.length}
+                            suffix={
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.3)',
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    개
+                                </Text>
+                            }
+                            valueStyle={{ color: '#fff', fontSize: 24, fontWeight: 700 }}
+                            prefix={
+                                <DashboardOutlined
+                                    style={{ color: '#00A8FF', marginRight: 8 }}
+                                />
+                            }
+                        />
+                    </Card>
+                </Col>
+                <Col xs={12} sm={6}>
+                    <Card
+                        style={{
+                            background:
+                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 12,
+                        }}
+                        styles={{ body: { padding: '16px 20px' } }}
+                    >
+                        <Statistic
+                            title={
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.5)',
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    실행 중
+                                </Text>
+                            }
+                            value={summary?.running_bots || runningCount}
+                            suffix={
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.3)',
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    개
+                                </Text>
+                            }
+                            valueStyle={{ color: '#00C076', fontSize: 24, fontWeight: 700 }}
+                            prefix={
+                                <ThunderboltOutlined
+                                    style={{ color: '#00C076', marginRight: 8 }}
+                                />
+                            }
+                        />
+                    </Card>
+                </Col>
+                <Col xs={12} sm={6}>
+                    <Card
+                        style={{
+                            background:
+                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 12,
+                        }}
+                        styles={{ body: { padding: '16px 20px' } }}
+                    >
+                        <Statistic
+                            title={
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.5)',
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    총 손익
+                                </Text>
+                            }
+                            value={formatPnl(summary?.total_pnl || 0)}
+                            valueStyle={{
+                                color:
+                                    (summary?.total_pnl || 0) >= 0 ? '#00C076' : '#FF4D6A',
+                                fontSize: 24,
+                                fontWeight: 700,
+                            }}
+                            prefix={
+                                (summary?.total_pnl || 0) >= 0 ? (
+                                    <RiseOutlined
+                                        style={{ color: '#00C076', marginRight: 8 }}
+                                    />
+                                ) : (
+                                    <FallOutlined
+                                        style={{ color: '#FF4D6A', marginRight: 8 }}
+                                    />
+                                )
+                            }
+                        />
+                    </Card>
+                </Col>
+                <Col xs={12} sm={6}>
+                    <Card
+                        style={{
+                            background:
+                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 12,
+                        }}
+                        styles={{ body: { padding: '16px 20px' } }}
+                    >
+                        <Statistic
+                            title={
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.5)',
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    평균 승률
+                                </Text>
+                            }
+                            value={summary?.overall_win_rate?.toFixed(1) || '0.0'}
+                            suffix="%"
+                            valueStyle={{
+                                color:
+                                    (summary?.overall_win_rate || 0) >= 50
+                                        ? '#00C076'
+                                        : '#FF4D6A',
+                                fontSize: 24,
+                                fontWeight: 700,
+                            }}
+                            prefix={
+                                <TrophyOutlined
+                                    style={{ color: '#F5C242', marginRight: 8 }}
+                                />
+                            }
+                        />
+                    </Card>
+                </Col>
+            </Row>
+
+            {/* 잔고 할당 시각화 */}
+            <AllocationBar bots={bots} totalAllocation={totalAllocation} />
+
+            {/* 탭 기반 봇 목록 */}
+            <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                items={tabItems}
+                style={{ marginBottom: 16 }}
+                tabBarStyle={{
+                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    marginBottom: 24,
+                }}
+                tabBarExtraContent={
+                    activeTab === 'grid' ? (
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => setGridBotModal({ open: true, bot: null })}
+                            disabled={availableAllocation <= 0}
+                            style={{
+                                background:
+                                    'linear-gradient(135deg, #00C076 0%, #00A8FF 100%)',
+                                border: 'none',
+                                borderRadius: 8,
+                                fontWeight: 600,
+                            }}
+                        >
+                            그리드 봇 추가
+                        </Button>
+                    ) : null
+                }
+            />
+
+            {/* 봇 카드 그리드 */}
+            <Spin spinning={loading}>
+                <Row gutter={[16, 16]}>
+                    {filteredBots.map((bot) => (
+                        <Col xs={24} sm={12} lg={8} xl={6} key={bot.id}>
+                            {renderBotCard(bot)}
+                        </Col>
+                    ))}
+
+                    {/* 새 AI 봇 추가 카드 (AI 탭 또는 전체 탭에서만) */}
+                    {(activeTab === 'all' || activeTab === 'ai_trend') &&
+                        availableAllocation > 0 && (
+                            <Col xs={24} sm={12} lg={8} xl={6}>
+                                <AddBotCard
+                                    maxAllocation={availableAllocation}
+                                    strategies={strategies}
+                                    onCreate={handleCreateBot}
+                                />
+                            </Col>
+                        )}
+
+                    {/* 그리드 봇 빈 상태 */}
+                    {activeTab === 'grid' &&
+                        botCounts.gridCount === 0 &&
+                        !loading && (
+                            <Col xs={24}>
+                                <div
+                                    style={{
+                                        textAlign: 'center',
+                                        padding: '60px 20px',
+                                        background:
+                                            'linear-gradient(180deg, #0f1923 0%, #0a1015 100%)',
+                                        borderRadius: 16,
+                                        border: '1px solid rgba(0, 229, 255, 0.15)',
+                                    }}
+                                >
+                                    <LineChartOutlined
+                                        style={{
+                                            fontSize: 48,
+                                            color: 'rgba(0, 229, 255, 0.3)',
+                                            marginBottom: 16,
+                                            display: 'block',
+                                        }}
+                                    />
+                                    <Text
+                                        style={{
+                                            color: 'rgba(255,255,255,0.6)',
+                                            fontSize: 16,
+                                            display: 'block',
+                                            marginBottom: 8,
+                                        }}
+                                    >
+                                        그리드 봇이 없습니다
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            color: 'rgba(255,255,255,0.3)',
+                                            fontSize: 13,
+                                            display: 'block',
+                                            marginBottom: 24,
+                                        }}
+                                    >
+                                        가격 범위 내에서 자동으로 매수/매도를 반복하는 그리드
+                                        봇을 만들어보세요
+                                    </Text>
+                                    <Button
+                                        type="primary"
+                                        icon={<PlusOutlined />}
+                                        onClick={() =>
+                                            setGridBotModal({ open: true, bot: null })
+                                        }
+                                        disabled={availableAllocation <= 0}
+                                        style={{
+                                            background:
+                                                'linear-gradient(135deg, #00C076 0%, #00A8FF 100%)',
+                                            border: 'none',
+                                            borderRadius: 10,
+                                            fontWeight: 600,
+                                            height: 44,
+                                            padding: '0 24px',
+                                        }}
+                                    >
+                                        첫 그리드 봇 만들기
+                                    </Button>
+                                </div>
+                            </Col>
+                        )}
+
+                    {/* 전체 빈 상태 */}
+                    {bots.length === 0 && !loading && activeTab === 'all' && (
+                        <Col xs={24}>
+                            <div
+                                style={{
+                                    textAlign: 'center',
+                                    padding: '60px 20px',
+                                    background:
+                                        'linear-gradient(180deg, #1e1e2d 0%, #171725 100%)',
+                                    borderRadius: 16,
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                }}
+                            >
+                                <RobotOutlined
+                                    style={{
+                                        fontSize: 48,
+                                        color: 'rgba(255,255,255,0.2)',
+                                        marginBottom: 16,
+                                        display: 'block',
+                                    }}
+                                />
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.4)',
+                                        fontSize: 16,
+                                        display: 'block',
+                                        marginBottom: 8,
+                                    }}
+                                >
+                                    등록된 봇이 없습니다
+                                </Text>
+                                <Text
+                                    style={{
+                                        color: 'rgba(255,255,255,0.25)',
+                                        fontSize: 13,
+                                    }}
+                                >
+                                    AI 추세 봇 또는 그리드 봇을 추가하여 자동 거래를
+                                    시작하세요
+                                </Text>
+                            </div>
+                        </Col>
+                    )}
+                </Row>
+            </Spin>
+
+            {/* AI 봇 통계 모달 */}
+            <BotStatsModal
+                botId={statsModal.botId}
+                botName={statsModal.botName}
+                open={statsModal.open}
+                onClose={() =>
+                    setStatsModal({ open: false, botId: null, botName: null })
+                }
+            />
+
+            {/* AI 봇 편집 모달 */}
+            <EditBotModal
+                bot={editModal.bot}
+                strategies={strategies}
+                maxAllocation={availableAllocation}
+                open={editModal.open}
+                onClose={() => setEditModal({ open: false, bot: null })}
+                onUpdate={handleUpdateBot}
+            />
+
+            {/* 그리드 봇 생성/편집 모달 */}
+            <CreateGridBotModal
+                open={gridBotModal.open}
+                onClose={() => setGridBotModal({ open: false, bot: null })}
+                onSuccess={() => {
+                    loadBots();
+                    loadSummary();
+                }}
+                maxAllocation={availableAllocation}
+                editBot={gridBotModal.bot}
+            />
+        </div>
+    );
+}

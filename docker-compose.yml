@@ -57,7 +57,8 @@ services:
 
       # App Settings
       DEBUG: "False"
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,https://yourdomain.com}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
 
       # Redis
       REDIS_URL: redis://default:${REDIS_PASSWORD:-change-this-redis-password}@redis:6379

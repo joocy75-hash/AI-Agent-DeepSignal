@@ -68,7 +68,7 @@ def check_deepseek_api() -> dict:
             "message": "정상 연결됨",
             "details": {
                 "api_key_configured": True,
-                "model": "deepseek-chat",
+                "model": "deepseek-chat (V3.2)",
                 "features": ["전략 생성", "시장 분석"],
             },
         }
