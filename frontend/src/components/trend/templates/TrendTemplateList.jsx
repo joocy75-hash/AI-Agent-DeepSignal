@@ -1,11 +1,7 @@
 /**
  * TrendTemplateList - AI 추세 봇 템플릿 목록
- *
- * 템플릿 목록 표시:
- * - 로딩 상태
- * - 에러 처리
- * - 빈 상태
- * - 템플릿 카드 그리드
+ * 
+ * 라이트 모드 + 한국어 UI
  */
 import React, { useState, useEffect } from 'react';
 import { Spin, Empty, Alert, Input, Select, Row, Col } from 'antd';
@@ -28,7 +24,6 @@ const TrendTemplateList = ({ availableBalance = 0, onBotCreated }) => {
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
 
-    // 템플릿 목록 로드
     useEffect(() => {
         loadTemplates();
     }, []);
@@ -52,19 +47,16 @@ const TrendTemplateList = ({ availableBalance = 0, onBotCreated }) => {
         }
     };
 
-    // Use 버튼 클릭
     const handleUse = (template) => {
         setSelectedTemplate(template);
         setModalVisible(true);
     };
 
-    // 모달 닫기
     const handleModalClose = () => {
         setModalVisible(false);
         setSelectedTemplate(null);
     };
 
-    // 봇 생성 성공
     const handleSuccess = (result) => {
         console.log('Trend bot created:', result);
         loadTemplates();
@@ -108,7 +100,7 @@ const TrendTemplateList = ({ availableBalance = 0, onBotCreated }) => {
         return (
             <Alert
                 type="error"
-                message="오류"
+                message="오류 발생"
                 description={error}
                 showIcon
                 action={
@@ -123,7 +115,7 @@ const TrendTemplateList = ({ availableBalance = 0, onBotCreated }) => {
             {/* 필터 바 */}
             <div className="trend-template-list-header">
                 <Input
-                    placeholder="심볼 또는 이름으로 검색..."
+                    placeholder="코인명으로 검색 (예: BTC, ETH)"
                     prefix={<SearchOutlined />}
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
@@ -137,16 +129,16 @@ const TrendTemplateList = ({ availableBalance = 0, onBotCreated }) => {
                 >
                     <Option value="roi">수익률 높은순</Option>
                     <Option value="win_rate">승률 높은순</Option>
-                    <Option value="users">사용자 많은순</Option>
-                    <Option value="risk">위험도 낮은순</Option>
-                    <Option value="symbol">심볼 A-Z</Option>
+                    <Option value="users">인기순</Option>
+                    <Option value="risk">안전한 순</Option>
+                    <Option value="symbol">코인명 순</Option>
                 </Select>
             </div>
 
-            {/* 템플릿 카드 그리드 */}
+            {/* 템플릿 카드 */}
             {filteredTemplates.length === 0 ? (
                 <Empty
-                    description="등록된 AI 추세 템플릿이 없습니다"
+                    description="등록된 AI 추세 전략이 없습니다"
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                 />
             ) : (
@@ -162,7 +154,7 @@ const TrendTemplateList = ({ availableBalance = 0, onBotCreated }) => {
                 </Row>
             )}
 
-            {/* Use 모달 */}
+            {/* 사용 모달 */}
             <UseTrendTemplateModal
                 visible={modalVisible}
                 template={selectedTemplate}

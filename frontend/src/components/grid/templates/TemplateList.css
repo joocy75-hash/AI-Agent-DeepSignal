@@ -1,4 +1,4 @@
-/* TemplateList.css */
+/* TemplateList.css - 그리드 템플릿 목록 (라이트 모드) */
 
 .template-list {
     padding: 16px 0;
@@ -10,12 +10,13 @@
     align-items: center;
     justify-content: center;
     padding: 60px 20px;
-    color: #666;
+    color: #86868b;
 }
 
 .template-list-loading p {
     margin-top: 16px;
     font-size: 14px;
+    color: #86868b;
 }
 
 .template-list-header {
@@ -29,30 +30,27 @@
     flex: 1;
     min-width: 200px;
     max-width: 300px;
+    border-radius: 8px;
 }
 
 .search-input .ant-input {
-    background: #1a1a2e;
-    border-color: #2d2d44;
-    color: #fff;
+    color: #1d1d1f;
 }
 
 .search-input .ant-input::placeholder {
-    color: #666;
+    color: #86868b;
 }
 
 .search-input .ant-input-prefix {
-    color: #666;
+    color: #86868b;
 }
 
 .sort-select {
-    width: 150px;
+    min-width: 150px;
 }
 
 .sort-select .ant-select-selector {
-    background: #1a1a2e !important;
-    border-color: #2d2d44 !important;
-    color: #fff;
+    border-radius: 8px !important;
 }
 
 /* 반응형 */

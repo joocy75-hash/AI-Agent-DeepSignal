@@ -1,10 +1,7 @@
 /**
- * UseTrendTemplateModal - AI 추세 봇 템플릿 사용 모달
- *
- * - USDT 정수 금액 입력
- * - 레버리지 선택
- * - 가용 잔액 표시
- * - 전략 정보 표시
+ * UseTrendTemplateModal - AI 추세 봇 생성 모달
+ * 
+ * 라이트 모드 + 한국어 UI
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -43,7 +40,6 @@ const UseTrendTemplateModal = ({
     const [leverage, setLeverage] = useState(5);
     const [loading, setLoading] = useState(false);
 
-    // 템플릿 변경 시 초기값 설정
     useEffect(() => {
         if (template) {
             const minInv = Math.ceil(parseFloat(template.min_investment) || 50);
@@ -53,17 +49,15 @@ const UseTrendTemplateModal = ({
     }, [template]);
 
     const handleAmountChange = (value) => {
-        // 정수만 허용
         setInvestmentAmount(Math.floor(value || 0));
     };
 
     const handleConfirm = async () => {
         if (!template) return;
 
-        // 검증
         const minInv = Math.ceil(parseFloat(template.min_investment));
         if (investmentAmount < minInv) {
-            message.error(`최소 투자금액은 ${minInv} USDT 입니다`);
+            message.error(`최소 ${minInv} USDT 이상 입력해주세요`);
             return;
         }
 
@@ -79,12 +73,12 @@ const UseTrendTemplateModal = ({
                 leverage: leverage,
             });
 
-            message.success('AI 추세 봇이 생성되었습니다!');
+            message.success('🎉 AI 추세 봇이 생성되었습니다!');
             onSuccess?.(result);
             onClose();
         } catch (error) {
             console.error('Failed to create trend bot:', error);
-            message.error(error.response?.data?.detail || '봇 생성 실패');
+            message.error(error.response?.data?.detail || '봇 생성에 실패했습니다. 다시 시도해주세요.');
         } finally {
             setLoading(false);
         }
@@ -100,9 +94,9 @@ const UseTrendTemplateModal = ({
 
     const getRiskLabel = (level) => {
         switch (level) {
-            case 'low': return '저위험';
-            case 'medium': return '중위험';
-            case 'high': return '고위험';
+            case 'low': return '안전';
+            case 'medium': return '보통';
+            case 'high': return '공격적';
             default: return level;
         }
     };
@@ -118,12 +112,18 @@ const UseTrendTemplateModal = ({
 
     const getStrategyLabel = (type) => {
         switch (type) {
-            case 'ema_crossover': return 'EMA 크로스오버';
-            case 'rsi_divergence': return 'RSI 다이버전스';
-            case 'macd_trend': return 'MACD 추세';
-            case 'bollinger_bands': return '볼린저밴드';
+            case 'ema_crossover': return 'EMA 교차 전략';
+            case 'rsi_divergence': return 'RSI 반전 전략';
+            case 'macd_trend': return 'MACD 추세 전략';
+            case 'bollinger_bands': return '볼린저밴드 전략';
             default: return type;
         }
+    };
+
+    const getDirectionText = () => {
+        if (isBoth) return '롱/숏 양방향';
+        if (isLong) return '롱 (상승 시 수익)';
+        return '숏 (하락 시 수익)';
     };
 
     return (
@@ -137,7 +137,7 @@ const UseTrendTemplateModal = ({
             closable={true}
         >
             <div className="modal-content">
-                {/* 헤더: 템플릿 정보 */}
+                {/* 헤더 */}
                 <div className="modal-header">
                     <h2>{template.symbol}</h2>
                     <div className="header-tags">
@@ -146,50 +146,50 @@ const UseTrendTemplateModal = ({
                         </span>
                         <span className={`tag ${template.direction}`}>
                             {isBoth ? '양방향' :
-                                isLong ? <><ArrowUpOutlined /> Long</> :
-                                    <><ArrowDownOutlined /> Short</>}
+                                isLong ? <><ArrowUpOutlined /> 롱</> :
+                                    <><ArrowDownOutlined /> 숏</>}
                         </span>
-                        <span className="tag">{template.leverage}x</span>
+                        <span className="tag">{template.leverage}배 레버리지</span>
                     </div>
                 </div>
 
-                {/* 통계 정보 */}
+                {/* 예상 성과 */}
                 <div className="modal-stats">
                     <div className="stat-item">
-                        <span className="stat-label">30일 백테스트 ROI</span>
+                        <span className="stat-label">30일 예상 수익률</span>
                         <span className={`stat-value ${roiValue >= 0 ? 'positive' : 'negative'}`}>
-                            {roiValue >= 0 ? '+' : ''}{roiValue.toFixed(2)}%
+                            {roiValue >= 0 ? '+' : ''}{roiValue.toFixed(1)}%
                         </span>
                     </div>
                     <div className="stat-item">
                         <span className="stat-label">승률</span>
                         <span className={`stat-value ${winRate >= 50 ? 'positive' : 'negative'}`}>
-                            {winRate.toFixed(1)}%
+                            {winRate.toFixed(0)}%
                         </span>
                     </div>
                     <div className="stat-item">
                         <span className="stat-label">최대 손실</span>
-                        <span className="stat-value">{(template.backtest_max_drawdown || 0).toFixed(2)}%</span>
+                        <span className="stat-value">-{(template.backtest_max_drawdown || 0).toFixed(1)}%</span>
                     </div>
                 </div>
 
-                {/* 리스크 레벨 */}
+                {/* 위험도 */}
                 <div className="risk-level-section">
                     <SafetyOutlined style={{ color: getRiskColor(template.risk_level) }} />
                     <span style={{ color: getRiskColor(template.risk_level) }}>
-                        {getRiskLabel(template.risk_level)}
+                        위험도: {getRiskLabel(template.risk_level)}
                     </span>
-                    <Tag color="default" className="risk-tags">
-                        SL: {template.stop_loss_percent}% / TP: {template.take_profit_percent}%
+                    <Tag className="risk-tags">
+                        손절 {template.stop_loss_percent}% / 익절 {template.take_profit_percent}%
                     </Tag>
                 </div>
 
-                {/* 투자금액 입력 */}
+                {/* 투자 설정 */}
                 <div className="investment-section">
-                    <h3>투자 금액 설정</h3>
+                    <h3>💰 투자 금액 설정</h3>
 
                     <div className="margin-input">
-                        <label>투자금액 (USDT)</label>
+                        <label>투자할 금액 (USDT)</label>
                         <div className="input-row">
                             <InputNumber
                                 value={investmentAmount}
@@ -206,7 +206,7 @@ const UseTrendTemplateModal = ({
                     </div>
 
                     <div className="margin-input" style={{ marginTop: 16 }}>
-                        <label>레버리지</label>
+                        <label>레버리지 (배율)</label>
                         <div className="input-row">
                             <Select
                                 value={leverage}
@@ -215,43 +215,43 @@ const UseTrendTemplateModal = ({
                                 style={{ width: '100%' }}
                             >
                                 {LEVERAGE_OPTIONS.map((lev) => (
-                                    <Option key={lev} value={lev}>{lev}x</Option>
+                                    <Option key={lev} value={lev}>{lev}배</Option>
                                 ))}
                             </Select>
                         </div>
                     </div>
 
-                    {/* 가용 잔액 */}
+                    {/* 사용 가능 잔액 */}
                     <div className="balance-row" style={{ marginTop: 16 }}>
-                        <span className="balance-label">가용 잔액</span>
-                        <span className="balance-value">{Math.floor(availableBalance)} USDT</span>
+                        <span className="balance-label">사용 가능 금액</span>
+                        <span className="balance-value">{Math.floor(availableBalance).toLocaleString()} USDT</span>
                     </div>
                 </div>
 
-                {/* 파라미터 펼치기 */}
+                {/* 상세 정보 */}
                 <Collapse
                     ghost
                     expandIcon={({ isActive }) => <DownOutlined rotate={isActive ? 180 : 0} />}
                     className="parameters-collapse"
                 >
-                    <Panel header="전략 상세 정보" key="1">
+                    <Panel header="📋 전략 상세 정보 보기" key="1">
                         <Descriptions column={1} size="small">
-                            <Descriptions.Item label="전략 타입">
+                            <Descriptions.Item label="전략 유형">
                                 {getStrategyLabel(template.strategy_type)}
                             </Descriptions.Item>
-                            <Descriptions.Item label="방향">
-                                {isBoth ? '양방향' : isLong ? 'Long (매수)' : 'Short (매도)'}
+                            <Descriptions.Item label="거래 방향">
+                                {getDirectionText()}
                             </Descriptions.Item>
-                            <Descriptions.Item label="손절">
-                                {template.stop_loss_percent}%
+                            <Descriptions.Item label="손절 설정">
+                                가격이 {template.stop_loss_percent}% 하락 시 자동 매도
                             </Descriptions.Item>
-                            <Descriptions.Item label="익절">
-                                {template.take_profit_percent}%
+                            <Descriptions.Item label="익절 설정">
+                                가격이 {template.take_profit_percent}% 상승 시 자동 매도
                             </Descriptions.Item>
                             <Descriptions.Item label="최소 투자금">
-                                {minInvestment} USDT
+                                {minInvestment.toLocaleString()} USDT
                             </Descriptions.Item>
-                            <Descriptions.Item label="리스크 레벨">
+                            <Descriptions.Item label="위험도">
                                 <span style={{ color: getRiskColor(template.risk_level) }}>
                                     {getRiskLabel(template.risk_level)}
                                 </span>
@@ -260,7 +260,7 @@ const UseTrendTemplateModal = ({
                     </Panel>
                 </Collapse>
 
-                {/* 확인 버튼 */}
+                {/* 시작 버튼 */}
                 <Button
                     type="primary"
                     block
@@ -271,7 +271,7 @@ const UseTrendTemplateModal = ({
                     className="confirm-button"
                     style={{ marginTop: 20 }}
                 >
-                    AI 추세 봇 생성
+                    🚀 AI 봇 시작하기
                 </Button>
             </div>
         </Modal>

@@ -1,11 +1,7 @@
 /**
- * TemplateList - AI 탭 컨텐츠
- *
- * 템플릿 목록 표시:
- * - 로딩 상태
- * - 에러 처리
- * - 빈 상태
- * - 템플릿 카드 그리드
+ * TemplateList - 그리드 봇 템플릿 목록
+ * 
+ * 라이트 모드 + 한국어 UI
  */
 import React, { useState, useEffect } from 'react';
 import { Spin, Empty, Alert, Input, Select, Row, Col } from 'antd';
@@ -17,7 +13,7 @@ import './TemplateList.css';
 
 const { Option } = Select;
 
-const TemplateList = ({ availableBalance = 0 }) => {
+const TemplateList = ({ availableBalance = 0, onBotCreated }) => {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -28,7 +24,6 @@ const TemplateList = ({ availableBalance = 0 }) => {
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
 
-    // 템플릿 목록 로드
     useEffect(() => {
         loadTemplates();
     }, []);
@@ -42,39 +37,37 @@ const TemplateList = ({ availableBalance = 0 }) => {
             if (response.success) {
                 setTemplates(response.data || []);
             } else {
-                throw new Error(response.message || 'Failed to load templates');
+                throw new Error(response.message || '템플릿을 불러오지 못했습니다');
             }
         } catch (err) {
             console.error('Failed to load templates:', err);
-            setError(err.response?.data?.detail || err.message || 'Failed to load templates');
+            setError(err.response?.data?.detail || err.message || '템플릿을 불러오지 못했습니다');
         } finally {
             setLoading(false);
         }
     };
 
-    // Use 버튼 클릭
     const handleUse = (template) => {
         setSelectedTemplate(template);
         setModalVisible(true);
     };
 
-    // 모달 닫기
     const handleModalClose = () => {
         setModalVisible(false);
         setSelectedTemplate(null);
     };
 
-    // 봇 생성 성공
     const handleSuccess = (result) => {
         console.log('Bot created:', result);
-        // 성공 시 목록 새로고침하거나 상세 페이지로 이동
         loadTemplates();
+        onBotCreated?.();
     };
 
     // 필터링 및 정렬
     const filteredTemplates = templates
         .filter(t =>
-            t.symbol.toLowerCase().includes(searchTerm.toLowerCase())
+            t.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (t.name && t.name.toLowerCase().includes(searchTerm.toLowerCase()))
         )
         .sort((a, b) => {
             switch (sortBy) {
@@ -93,7 +86,7 @@ const TemplateList = ({ availableBalance = 0 }) => {
         return (
             <div className="template-list-loading">
                 <Spin size="large" />
-                <p>Loading AI strategies...</p>
+                <p>그리드 전략을 불러오는 중...</p>
             </div>
         );
     }
@@ -102,11 +95,11 @@ const TemplateList = ({ availableBalance = 0 }) => {
         return (
             <Alert
                 type="error"
-                message="Error"
+                message="오류 발생"
                 description={error}
                 showIcon
                 action={
-                    <a onClick={loadTemplates}>Retry</a>
+                    <a onClick={loadTemplates}>다시 시도</a>
                 }
             />
         );
@@ -117,7 +110,7 @@ const TemplateList = ({ availableBalance = 0 }) => {
             {/* 필터 바 */}
             <div className="template-list-header">
                 <Input
-                    placeholder="Search by symbol..."
+                    placeholder="코인명으로 검색 (예: BTC, ETH)"
                     prefix={<SearchOutlined />}
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
@@ -129,16 +122,16 @@ const TemplateList = ({ availableBalance = 0 }) => {
                     onChange={setSortBy}
                     className="sort-select"
                 >
-                    <Option value="roi">Highest ROI</Option>
-                    <Option value="users">Most Users</Option>
-                    <Option value="symbol">Symbol A-Z</Option>
+                    <Option value="roi">수익률 높은순</Option>
+                    <Option value="users">인기순</Option>
+                    <Option value="symbol">코인명 순</Option>
                 </Select>
             </div>
 
-            {/* 템플릿 카드 그리드 */}
+            {/* 템플릿 카드 */}
             {filteredTemplates.length === 0 ? (
                 <Empty
-                    description="No templates found"
+                    description="등록된 그리드 전략이 없습니다"
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                 />
             ) : (
@@ -154,7 +147,7 @@ const TemplateList = ({ availableBalance = 0 }) => {
                 </Row>
             )}
 
-            {/* Use 모달 */}
+            {/* 사용 모달 */}
             <UseTemplateModal
                 visible={modalVisible}
                 template={selectedTemplate}

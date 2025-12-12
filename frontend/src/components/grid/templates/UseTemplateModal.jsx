@@ -1,10 +1,7 @@
 /**
- * UseTemplateModal - 투자금액 입력 모달
- *
- * - USDT 정수 금액 입력
- * - 레버리지 선택
- * - 가용 잔액 표시
- * - 파라미터 펼치기
+ * UseTemplateModal - 그리드 봇 생성 모달
+ * 
+ * 라이트 모드 + 한국어 UI
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -16,7 +13,7 @@ import {
     Descriptions,
     message,
 } from 'antd';
-import { DownOutlined } from '@ant-design/icons';
+import { DownOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { gridTemplateAPI } from '../../../api/gridTemplate';
 import './UseTemplateModal.css';
 
@@ -36,7 +33,6 @@ const UseTemplateModal = ({
     const [leverage, setLeverage] = useState(5);
     const [loading, setLoading] = useState(false);
 
-    // 템플릿 변경 시 초기값 설정
     useEffect(() => {
         if (template) {
             const minInv = Math.ceil(parseFloat(template.min_investment) || 0);
@@ -46,17 +42,15 @@ const UseTemplateModal = ({
     }, [template]);
 
     const handleAmountChange = (value) => {
-        // 정수만 허용
         setInvestmentAmount(Math.floor(value || 0));
     };
 
     const handleConfirm = async () => {
         if (!template) return;
 
-        // 검증
         const minInv = Math.ceil(parseFloat(template.min_investment));
         if (investmentAmount < minInv) {
-            message.error(`최소 투자금액은 ${minInv} USDT 입니다`);
+            message.error(`최소 ${minInv} USDT 이상 입력해주세요`);
             return;
         }
 
@@ -72,12 +66,12 @@ const UseTemplateModal = ({
                 leverage: leverage,
             });
 
-            message.success('그리드 봇이 생성되었습니다!');
+            message.success('🎉 그리드 봇이 생성되었습니다!');
             onSuccess?.(result);
             onClose();
         } catch (error) {
             console.error('Failed to create bot:', error);
-            message.error(error.response?.data?.detail || '봇 생성 실패');
+            message.error(error.response?.data?.detail || '봇 생성에 실패했습니다. 다시 시도해주세요.');
         } finally {
             setLoading(false);
         }
@@ -87,6 +81,7 @@ const UseTemplateModal = ({
 
     const minInvestment = Math.ceil(parseFloat(template.min_investment) || 0);
     const roiValue = template.backtest_roi_30d || 0;
+    const isLong = template.direction === 'long';
 
     return (
         <Modal
@@ -99,42 +94,42 @@ const UseTemplateModal = ({
             closable={true}
         >
             <div className="modal-content">
-                {/* 헤더: 템플릿 정보 */}
+                {/* 헤더 */}
                 <div className="modal-header">
                     <h2>{template.symbol}</h2>
                     <div className="header-tags">
-                        <span className="tag">Futures grid</span>
+                        <span className="tag">그리드 봇</span>
                         <span className={`tag ${template.direction}`}>
-                            {template.direction === 'long' ? 'Long' : 'Short'}
+                            {isLong ? <><ArrowUpOutlined /> 롱</> : <><ArrowDownOutlined /> 숏</>}
                         </span>
-                        <span className="tag">{template.leverage}x</span>
+                        <span className="tag">{template.leverage}배 레버리지</span>
                     </div>
                 </div>
 
-                {/* 통계 정보 */}
+                {/* 예상 성과 */}
                 <div className="modal-stats">
                     <div className="stat-item">
-                        <span className="stat-label">30일 백테스트 수익률</span>
+                        <span className="stat-label">30일 예상 수익률</span>
                         <span className={`stat-value ${roiValue >= 0 ? 'positive' : 'negative'}`}>
-                            {roiValue >= 0 ? '+' : ''}{roiValue.toFixed(2)}%
+                            {roiValue >= 0 ? '+' : ''}{roiValue.toFixed(1)}%
                         </span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">30일 최대 손실</span>
-                        <span className="stat-value">{(template.backtest_max_drawdown || 0).toFixed(2)}%</span>
+                        <span className="stat-label">최대 손실</span>
+                        <span className="stat-value">-{(template.backtest_max_drawdown || 0).toFixed(1)}%</span>
                     </div>
                     <div className="stat-item">
                         <span className="stat-label">사용자</span>
-                        <span className="stat-value">{template.active_users || 0}</span>
+                        <span className="stat-value">{template.active_users || 0}명</span>
                     </div>
                 </div>
 
-                {/* 투자금액 입력 */}
+                {/* 투자 설정 */}
                 <div className="investment-section">
-                    <h3>투자 금액 설정</h3>
+                    <h3>💰 투자 금액 설정</h3>
 
                     <div className="margin-input">
-                        <label>투자금액 (USDT)</label>
+                        <label>투자할 금액 (USDT)</label>
                         <div className="input-row">
                             <InputNumber
                                 value={investmentAmount}
@@ -151,7 +146,7 @@ const UseTemplateModal = ({
                     </div>
 
                     <div className="margin-input" style={{ marginTop: 16 }}>
-                        <label>레버리지</label>
+                        <label>레버리지 (배율)</label>
                         <div className="input-row">
                             <Select
                                 value={leverage}
@@ -160,52 +155,47 @@ const UseTemplateModal = ({
                                 style={{ width: '100%' }}
                             >
                                 {LEVERAGE_OPTIONS.map((lev) => (
-                                    <Option key={lev} value={lev}>{lev}x</Option>
+                                    <Option key={lev} value={lev}>{lev}배</Option>
                                 ))}
                             </Select>
                         </div>
                     </div>
 
-                    {/* 가용 잔액 */}
+                    {/* 사용 가능 잔액 */}
                     <div className="balance-row" style={{ marginTop: 16 }}>
-                        <span className="balance-label">가용 잔액</span>
-                        <span className="balance-value">{Math.floor(availableBalance)} USDT</span>
-                    </div>
-
-                    <div className="balance-row">
-                        <span className="balance-label">예상 청산가</span>
-                        <span className="balance-value">--</span>
+                        <span className="balance-label">사용 가능 금액</span>
+                        <span className="balance-value">{Math.floor(availableBalance).toLocaleString()} USDT</span>
                     </div>
                 </div>
 
-                {/* 파라미터 펼치기 */}
+                {/* 상세 정보 */}
                 <Collapse
                     ghost
                     expandIcon={({ isActive }) => <DownOutlined rotate={isActive ? 180 : 0} />}
                     className="parameters-collapse"
                 >
-                    <Panel header="상세 파라미터" key="1">
+                    <Panel header="📋 그리드 설정 보기" key="1">
                         <Descriptions column={1} size="small">
-                            <Descriptions.Item label="하한가">
-                                {parseFloat(template.lower_price).toFixed(4)} USDT
+                            <Descriptions.Item label="가격 하한선">
+                                {parseFloat(template.lower_price).toLocaleString()} USDT
                             </Descriptions.Item>
-                            <Descriptions.Item label="상한가">
-                                {parseFloat(template.upper_price).toFixed(4)} USDT
+                            <Descriptions.Item label="가격 상한선">
+                                {parseFloat(template.upper_price).toLocaleString()} USDT
                             </Descriptions.Item>
-                            <Descriptions.Item label="그리드 수">
-                                {template.grid_count}개
+                            <Descriptions.Item label="그리드 개수">
+                                {template.grid_count}개 (자동 분할 매매)
                             </Descriptions.Item>
-                            <Descriptions.Item label="그리드 모드">
-                                {template.grid_mode === 'arithmetic' ? '등차' : '등비'}
+                            <Descriptions.Item label="그리드 방식">
+                                {template.grid_mode === 'arithmetic' ? '등차 (균등 간격)' : '등비 (비율 간격)'}
                             </Descriptions.Item>
                             <Descriptions.Item label="최소 투자금">
-                                {minInvestment} USDT
+                                {minInvestment.toLocaleString()} USDT
                             </Descriptions.Item>
                         </Descriptions>
                     </Panel>
                 </Collapse>
 
-                {/* 확인 버튼 */}
+                {/* 시작 버튼 */}
                 <Button
                     type="primary"
                     block
@@ -216,7 +206,7 @@ const UseTemplateModal = ({
                     className="confirm-button"
                     style={{ marginTop: 20 }}
                 >
-                    봇 생성
+                    🚀 그리드 봇 시작하기
                 </Button>
             </div>
         </Modal>

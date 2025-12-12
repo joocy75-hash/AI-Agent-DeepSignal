@@ -1,23 +1,24 @@
-/* TrendTemplateCard.css - AI 추세 봇 템플릿 카드 스타일 */
+/* TrendTemplateCard.css - AI 추세 봇 템플릿 카드 스타일 (라이트 모드) */
 
 .trend-template-card {
-    background: linear-gradient(145deg, #1a1a2e, #16213e);
-    border: 1px solid rgba(88, 86, 214, 0.2);
+    background: #ffffff;
+    border: 1px solid #e5e5e7;
     border-radius: 16px;
     padding: 20px;
     position: relative;
     transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .trend-template-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(88, 86, 214, 0.2);
-    border-color: rgba(88, 86, 214, 0.4);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    border-color: #d2d2d7;
 }
 
 .trend-template-card.featured {
-    border-color: rgba(88, 86, 214, 0.5);
-    background: linear-gradient(145deg, #1a1a2e, #1e1e3f);
+    border-color: #5856d6;
+    box-shadow: 0 4px 16px rgba(88, 86, 214, 0.1);
 }
 
 /* 헤더 */
@@ -35,7 +36,7 @@
 .trend-symbol {
     font-size: 20px;
     font-weight: 700;
-    color: #ffffff;
+    color: #1d1d1f;
     margin: 0 0 8px 0;
 }
 
@@ -54,8 +55,8 @@
 }
 
 .tag-strategy {
-    background: rgba(88, 86, 214, 0.2);
-    color: #a29bfe;
+    background: #f5f5f7;
+    color: #5856d6;
 }
 
 .tag-direction {
@@ -63,36 +64,38 @@
 }
 
 .tag-direction.long {
-    background: rgba(52, 199, 89, 0.2);
+    background: rgba(52, 199, 89, 0.12);
     color: #34c759;
 }
 
 .tag-direction.short {
-    background: rgba(255, 59, 48, 0.2);
+    background: rgba(255, 59, 48, 0.12);
     color: #ff3b30;
 }
 
 .tag-direction.both {
-    background: rgba(255, 149, 0, 0.2);
+    background: rgba(255, 149, 0, 0.12);
     color: #ff9500;
 }
 
 .tag-leverage {
-    background: rgba(0, 122, 255, 0.2);
-    color: #007aff;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    font-weight: 600;
 }
 
 .trend-card-header .use-button {
-    background: linear-gradient(135deg, #5856d6, #6e64e3);
+    background: #0071e3;
     border: none;
     border-radius: 8px;
     font-weight: 600;
     padding: 0 20px;
     height: 36px;
+    color: #ffffff;
 }
 
 .trend-card-header .use-button:hover {
-    background: linear-gradient(135deg, #6e64e3, #8078ea);
+    background: #0077ed;
 }
 
 /* 바디 */
@@ -126,7 +129,7 @@
     display: block;
     font-size: 18px;
     font-weight: 700;
-    color: #ffffff;
+    color: #1d1d1f;
 }
 
 .stat-item .stat-value.positive {
@@ -143,7 +146,7 @@
     justify-content: center;
     gap: 12px;
     padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid #f5f5f7;
 }
 
 .risk-badge {
@@ -154,18 +157,18 @@
 }
 
 .risk-badge.sl {
-    background: rgba(255, 59, 48, 0.15);
-    color: #ff6666;
+    background: rgba(255, 59, 48, 0.08);
+    color: #ff3b30;
 }
 
 .risk-badge.tp {
-    background: rgba(52, 199, 89, 0.15);
-    color: #66d98a;
+    background: rgba(52, 199, 89, 0.08);
+    color: #34c759;
 }
 
 /* 푸터 */
 .trend-card-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid #f5f5f7;
     padding-top: 12px;
 }
 
@@ -187,7 +190,7 @@
 
 .footer-value {
     font-size: 13px;
-    color: #ffffff;
+    color: #1d1d1f;
     font-weight: 500;
 }
 
@@ -208,7 +211,7 @@
     position: absolute;
     top: 12px;
     right: 12px;
-    background: linear-gradient(135deg, #5856d6, #a29bfe);
+    background: linear-gradient(135deg, #5856d6, #007aff);
     color: white;
     padding: 4px 10px;
     border-radius: 12px;

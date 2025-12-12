@@ -1,4 +1,4 @@
-/* TrendTemplateList.css - AI 추세 봇 템플릿 목록 스타일 */
+/* TrendTemplateList.css - AI 추세 템플릿 목록 (라이트 모드) */
 
 .trend-template-list {
     width: 100%;
@@ -16,6 +16,7 @@
 .trend-template-list-loading p {
     margin-top: 16px;
     font-size: 14px;
+    color: #86868b;
 }
 
 .trend-template-list-header {
@@ -29,14 +30,11 @@
     flex: 1;
     min-width: 200px;
     max-width: 300px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
 }
 
 .trend-template-list-header .search-input input {
-    background: transparent;
-    color: #ffffff;
+    color: #1d1d1f;
 }
 
 .trend-template-list-header .search-input .ant-input-prefix {
@@ -48,10 +46,7 @@
 }
 
 .trend-template-list-header .sort-select .ant-select-selector {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-radius: 8px !important;
-    color: #ffffff;
 }
 
 .trend-template-list .ant-empty {

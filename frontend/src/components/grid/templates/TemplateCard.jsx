@@ -1,18 +1,11 @@
 /**
- * TemplateCard - Bitget 스타일 템플릿 카드
- *
- * 표시 정보:
- * - 심볼, 방향, 레버리지 태그
- * - 30D ROI (%)
- * - 미니 차트
- * - 추천 투자 기간
- * - 최소 투자금액
- * - 사용자 수
- * - Use 버튼
+ * TemplateCard - 그리드 봇 템플릿 카드
+ * 
+ * 라이트 모드 + 한국어 UI
  */
 import React from 'react';
-import { Button, Tag } from 'antd';
-import { UserOutlined, RiseOutlined } from '@ant-design/icons';
+import { Button, Tag, Tooltip } from 'antd';
+import { UserOutlined, RiseOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import MiniRoiChart from './MiniRoiChart';
 import './TemplateCard.css';
 
@@ -39,37 +32,42 @@ const TemplateCard = ({
     const roiValue = backtest_roi_30d || 0;
     const isPositiveRoi = roiValue >= 0;
 
+    const getPeriodLabel = (period) => {
+        if (!period) return '7-30일';
+        return period.replace('days', '일').replace('-', '~');
+    };
+
     return (
         <div className={`template-card ${is_featured ? 'featured' : ''}`}>
-            {/* 상단 영역: 심볼 + Use 버튼 */}
+            {/* 상단: 심볼 + 사용 버튼 */}
             <div className="template-card-header">
                 <div className="template-symbol-section">
                     <h3 className="template-symbol">{symbol}</h3>
                     <div className="template-tags">
-                        <Tag className="tag-type">Futures grid</Tag>
+                        <Tag className="tag-type">그리드 봇</Tag>
                         <Tag className={`tag-direction ${isLong ? 'long' : 'short'}`}>
-                            {isLong ? 'Long' : 'Short'}
+                            {isLong ? <><ArrowUpOutlined /> 롱</> : <><ArrowDownOutlined /> 숏</>}
                         </Tag>
-                        <Tag className="tag-leverage">{leverage}X</Tag>
+                        <Tag className="tag-leverage">{leverage}배</Tag>
                     </div>
                 </div>
 
                 <Button
-                    type="default"
+                    type="primary"
                     className="use-button"
                     onClick={() => onUse(template)}
                     loading={loading}
                 >
-                    Use
+                    사용하기
                 </Button>
             </div>
 
-            {/* 중앙 영역: ROI + 차트 */}
+            {/* 중앙: 수익률 + 차트 */}
             <div className="template-card-body">
                 <div className="roi-section">
-                    <span className="roi-label">30D backtested ROI</span>
+                    <span className="roi-label">30일 예상 수익률</span>
                     <span className={`roi-value ${isPositiveRoi ? 'positive' : 'negative'}`}>
-                        {isPositiveRoi ? '+' : ''}{roiValue.toFixed(2)}%
+                        {isPositiveRoi ? '+' : ''}{roiValue.toFixed(1)}%
                     </span>
                 </div>
 
@@ -78,31 +76,30 @@ const TemplateCard = ({
                         data={roi_chart || []}
                         width={120}
                         height={50}
-                        color={isPositiveRoi ? '#00b894' : '#e74c3c'}
+                        color={isPositiveRoi ? '#34c759' : '#ff3b30'}
                     />
                 </div>
             </div>
 
-            {/* 하단 영역: 추가 정보 */}
+            {/* 하단: 추가 정보 */}
             <div className="template-card-footer">
                 <div className="footer-row">
-                    <span className="footer-label">Recommended investment period</span>
-                    <span className="footer-value">{recommended_period || '7-30 days'}</span>
+                    <span className="footer-label">권장 운용 기간</span>
+                    <span className="footer-value">{getPeriodLabel(recommended_period)}</span>
                 </div>
                 <div className="footer-row">
-                    <span className="footer-label">Min. investment</span>
-                    <span className="footer-value">{parseFloat(min_investment || 0).toFixed(2)} USDT</span>
-
+                    <span className="footer-label">최소 금액</span>
+                    <span className="footer-value">{parseFloat(min_investment || 0).toFixed(0)} USDT</span>
                     <span className="user-count">
-                        <UserOutlined /> {active_users || 0}
+                        <UserOutlined /> {active_users || 0}명
                     </span>
                 </div>
             </div>
 
-            {/* Featured 배지 */}
+            {/* 추천 배지 */}
             {is_featured && (
                 <div className="featured-badge">
-                    <RiseOutlined /> HOT
+                    <RiseOutlined /> 추천
                 </div>
             )}
         </div>

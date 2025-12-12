@@ -1,275 +1,202 @@
-/* UseTemplateModal.css */
+/* UseTemplateModal.css - 그리드 봇 생성 모달 (라이트 모드) */
 
-.use-template-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
-}
-
-.use-template-modal {
-    background: linear-gradient(145deg, #1a1d21 0%, #12151a 100%);
+.use-template-modal .ant-modal-content {
+    background: #ffffff;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    width: 90%;
-    max-width: 500px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid #e5e5e7;
 }
 
-.use-template-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.use-template-modal .ant-modal-close {
+    color: #86868b;
 }
 
-.use-template-modal-header h3 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #ffffff;
+.use-template-modal .ant-modal-close:hover {
+    color: #1d1d1f;
 }
 
-.close-btn {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 8px;
-    transition: all 0.2s ease;
+.use-template-modal .modal-content {
+    padding: 4px;
 }
 
-.close-btn:hover {
-    color: #ffffff;
-    background-color: rgba(255, 255, 255, 0.1);
+/* 헤더 */
+.use-template-modal .modal-header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #f5f5f7;
 }
 
-.use-template-modal-content {
-    padding: 24px;
-}
-
-.template-summary {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 24px;
-}
-
-.template-summary h4 {
+.use-template-modal .modal-header h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1d1d1f;
     margin: 0 0 12px 0;
-    font-size: 1rem;
-    color: #00ff88;
 }
 
-.template-summary-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-}
-
-.summary-item {
+.use-template-modal .header-tags {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.summary-label {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.summary-value {
-    font-size: 0.95rem;
-    color: #ffffff;
-    font-weight: 500;
-}
-
-.investment-section {
-    margin-bottom: 24px;
-}
-
-.investment-section label {
-    display: block;
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.7);
-    margin-bottom: 8px;
-}
-
-.investment-input-wrapper {
-    display: flex;
-    align-items: center;
+    justify-content: center;
     gap: 8px;
-}
-
-.investment-input {
-    flex: 1;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 1rem;
-    color: #ffffff;
-    transition: all 0.2s ease;
-}
-
-.investment-input:focus {
-    outline: none;
-    border-color: #00ff88;
-    box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
-}
-
-.investment-input::placeholder {
-    color: rgba(255, 255, 255, 0.3);
-}
-
-.currency-label {
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.5);
-    font-weight: 500;
-}
-
-.quick-amounts {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
     flex-wrap: wrap;
 }
 
-.quick-amount-btn {
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
+.use-template-modal .header-tags .tag {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #f5f5f7;
+    color: #1d1d1f;
 }
 
-.quick-amount-btn:hover {
-    background: rgba(0, 255, 136, 0.1);
-    border-color: rgba(0, 255, 136, 0.3);
-    color: #00ff88;
+.use-template-modal .header-tags .tag.long {
+    background: rgba(52, 199, 89, 0.12);
+    color: #34c759;
 }
 
-.expected-results {
-    background: rgba(0, 255, 136, 0.05);
-    border: 1px solid rgba(0, 255, 136, 0.2);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 24px;
+.use-template-modal .header-tags .tag.short {
+    background: rgba(255, 59, 48, 0.12);
+    color: #ff3b30;
 }
 
-.expected-results h4 {
-    margin: 0 0 12px 0;
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.expected-results-grid {
+/* 통계 */
+.use-template-modal .modal-stats {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-}
-
-.result-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.result-label {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
-}
-
-.result-value {
-    font-size: 1.125rem;
-    font-weight: 600;
-}
-
-.result-value.positive {
-    color: #00ff88;
-}
-
-.result-value.negative {
-    color: #ff4757;
-}
-
-.use-template-modal-footer {
-    display: flex;
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    padding: 20px 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #f5f5f7;
+    border-radius: 12px;
 }
 
-.cancel-btn,
-.confirm-btn {
-    flex: 1;
-    padding: 14px 24px;
-    border-radius: 10px;
-    font-size: 1rem;
+.use-template-modal .stat-item {
+    text-align: center;
+}
+
+.use-template-modal .stat-label {
+    display: block;
+    font-size: 11px;
+    color: #86868b;
+    margin-bottom: 4px;
+}
+
+.use-template-modal .stat-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1d1d1f;
+}
+
+.use-template-modal .stat-value.positive {
+    color: #34c759;
+}
+
+.use-template-modal .stat-value.negative {
+    color: #ff3b30;
+}
+
+/* 투자 설정 */
+.use-template-modal .investment-section {
+    margin-bottom: 16px;
+}
+
+.use-template-modal .investment-section h3 {
+    font-size: 14px;
     font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    color: #1d1d1f;
+    margin-bottom: 16px;
 }
 
-.cancel-btn {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.7);
+.use-template-modal .margin-input label {
+    display: block;
+    font-size: 13px;
+    color: #86868b;
+    margin-bottom: 8px;
 }
 
-.cancel-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.3);
+.use-template-modal .input-row {
+    display: flex;
+    gap: 8px;
 }
 
-.confirm-btn {
-    background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+.use-template-modal .amount-input,
+.use-template-modal .leverage-select {
+    width: 100%;
+}
+
+.use-template-modal .ant-input-number,
+.use-template-modal .ant-select-selector {
+    border-radius: 8px !important;
+}
+
+.use-template-modal .ant-input-number-input {
+    color: #1d1d1f;
+}
+
+/* 잔액 */
+.use-template-modal .balance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.use-template-modal .balance-label {
+    font-size: 13px;
+    color: #86868b;
+}
+
+.use-template-modal .balance-value {
+    font-size: 13px;
+    color: #1d1d1f;
+    font-weight: 500;
+}
+
+/* 파라미터 */
+.use-template-modal .parameters-collapse {
+    margin-top: 16px;
+}
+
+.use-template-modal .parameters-collapse .ant-collapse-header {
+    color: #86868b !important;
+    padding: 12px 0 !important;
+}
+
+.use-template-modal .parameters-collapse .ant-collapse-content-box {
+    padding: 0 !important;
+}
+
+.use-template-modal .ant-descriptions-item-label {
+    color: #86868b !important;
+}
+
+.use-template-modal .ant-descriptions-item-content {
+    color: #1d1d1f !important;
+}
+
+/* 확인 버튼 */
+.use-template-modal .confirm-button {
+    background: #0071e3;
     border: none;
-    color: #000000;
+    border-radius: 10px;
+    font-weight: 600;
+    height: 48px;
+    font-size: 16px;
 }
 
-.confirm-btn:hover {
-    box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
-    transform: translateY(-1px);
+.use-template-modal .confirm-button:hover {
+    background: #0077ed;
 }
 
-.confirm-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
+.use-template-modal .confirm-button:disabled {
+    background: #e5e5e7;
+    color: #86868b;
 }
 
 /* Mobile responsive */
 @media (max-width: 480px) {
-    .use-template-modal {
-        width: 95%;
-        max-height: 95vh;
-    }
-
-    .template-summary-grid,
-    .expected-results-grid {
+    .use-template-modal .modal-stats {
         grid-template-columns: 1fr;
-    }
-
-    .use-template-modal-footer {
-        flex-direction: column;
     }
 }

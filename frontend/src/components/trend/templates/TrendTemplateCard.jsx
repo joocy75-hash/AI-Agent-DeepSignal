@@ -1,14 +1,7 @@
 /**
  * TrendTemplateCard - AI 추세 봇 템플릿 카드
- *
- * 표시 정보:
- * - 심볼, 방향, 레버리지 태그
- * - 30D ROI (%), 승률
- * - 손절/익절 설정
- * - 리스크 레벨
- * - 최소 투자금액
- * - 사용자 수
- * - Use 버튼
+ * 
+ * 라이트 모드 + 한국어 UI
  */
 import React from 'react';
 import { Button, Tag, Tooltip } from 'antd';
@@ -60,26 +53,32 @@ const TrendTemplateCard = ({
 
     const getRiskLabel = (level) => {
         switch (level) {
-            case 'low': return '저위험';
-            case 'medium': return '중위험';
-            case 'high': return '고위험';
+            case 'low': return '안전';
+            case 'medium': return '보통';
+            case 'high': return '공격적';
             default: return level;
         }
     };
 
     const getStrategyLabel = (type) => {
         switch (type) {
-            case 'ema_crossover': return 'EMA 크로스';
-            case 'rsi_divergence': return 'RSI 다이버전스';
+            case 'ema_crossover': return 'EMA 교차';
+            case 'rsi_divergence': return 'RSI 반전';
             case 'macd_trend': return 'MACD 추세';
             case 'bollinger_bands': return '볼린저밴드';
             default: return type;
         }
     };
 
+    const getDirectionLabel = () => {
+        if (isBoth) return '롱/숏 양방향';
+        if (isLong) return '롱 (상승)';
+        return '숏 (하락)';
+    };
+
     return (
         <div className={`trend-template-card ${is_featured ? 'featured' : ''}`}>
-            {/* 상단 영역: 심볼 + Use 버튼 */}
+            {/* 상단: 심볼 + 사용 버튼 */}
             <div className="trend-card-header">
                 <div className="trend-symbol-section">
                     <h3 className="trend-symbol">{symbol}</h3>
@@ -88,11 +87,11 @@ const TrendTemplateCard = ({
                             <ThunderboltOutlined /> {getStrategyLabel(strategy_type)}
                         </Tag>
                         <Tag className={`tag-direction ${isLong ? 'long' : isBoth ? 'both' : 'short'}`}>
-                            {isBoth ? <>양방향</> :
-                                isLong ? <><ArrowUpOutlined /> Long</> :
-                                    <><ArrowDownOutlined /> Short</>}
+                            {isBoth ? '양방향' :
+                                isLong ? <><ArrowUpOutlined /> 롱</> :
+                                    <><ArrowDownOutlined /> 숏</>}
                         </Tag>
-                        <Tag className="tag-leverage">{leverage}X</Tag>
+                        <Tag className="tag-leverage">{leverage}배</Tag>
                     </div>
                 </div>
 
@@ -106,48 +105,48 @@ const TrendTemplateCard = ({
                 </Button>
             </div>
 
-            {/* 중앙 영역: ROI + 승률 */}
+            {/* 중앙: 수익률 + 승률 */}
             <div className="trend-card-body">
                 <div className="stat-grid">
                     <div className="stat-item main">
-                        <span className="stat-label">30일 백테스트 ROI</span>
+                        <span className="stat-label">30일 예상 수익률</span>
                         <span className={`stat-value ${isPositiveRoi ? 'positive' : 'negative'}`}>
-                            {isPositiveRoi ? '+' : ''}{roiValue.toFixed(2)}%
+                            {isPositiveRoi ? '+' : ''}{roiValue.toFixed(1)}%
                         </span>
                     </div>
                     <div className="stat-item">
                         <span className="stat-label">승률</span>
                         <span className={`stat-value ${winRate >= 50 ? 'positive' : 'negative'}`}>
-                            {winRate.toFixed(1)}%
+                            {winRate.toFixed(0)}%
                         </span>
                     </div>
                     <div className="stat-item">
                         <span className="stat-label">최대 손실</span>
                         <span className="stat-value negative">
-                            {(backtest_max_drawdown || 0).toFixed(2)}%
+                            -{(backtest_max_drawdown || 0).toFixed(1)}%
                         </span>
                     </div>
                 </div>
 
                 {/* 손절/익절 설정 */}
                 <div className="risk-settings">
-                    <Tooltip title="손절 설정">
+                    <Tooltip title="손실이 이 비율에 도달하면 자동으로 매도합니다">
                         <span className="risk-badge sl">
-                            SL: {stop_loss_percent}%
+                            손절 {stop_loss_percent}%
                         </span>
                     </Tooltip>
-                    <Tooltip title="익절 설정">
+                    <Tooltip title="이익이 이 비율에 도달하면 자동으로 매도합니다">
                         <span className="risk-badge tp">
-                            TP: {take_profit_percent}%
+                            익절 {take_profit_percent}%
                         </span>
                     </Tooltip>
                 </div>
             </div>
 
-            {/* 하단 영역: 추가 정보 */}
+            {/* 하단: 추가 정보 */}
             <div className="trend-card-footer">
                 <div className="footer-row">
-                    <span className="footer-label">리스크 레벨</span>
+                    <span className="footer-label">위험도</span>
                     <span
                         className="footer-value risk-level"
                         style={{ color: getRiskColor(risk_level) }}
@@ -156,19 +155,18 @@ const TrendTemplateCard = ({
                     </span>
                 </div>
                 <div className="footer-row">
-                    <span className="footer-label">최소 투자금</span>
+                    <span className="footer-label">최소 금액</span>
                     <span className="footer-value">{parseFloat(min_investment || 0).toFixed(0)} USDT</span>
-
                     <span className="user-count">
-                        <UserOutlined /> {active_users || 0}
+                        <UserOutlined /> {active_users || 0}명 사용중
                     </span>
                 </div>
             </div>
 
-            {/* Featured 배지 */}
+            {/* HOT 배지 */}
             {is_featured && (
                 <div className="featured-badge">
-                    <ThunderboltOutlined /> HOT
+                    <ThunderboltOutlined /> 추천
                 </div>
             )}
         </div>

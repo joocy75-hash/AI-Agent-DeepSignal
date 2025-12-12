@@ -1,4 +1,4 @@
-/* TrendBotTabs.css - AI 추세 봇 탭 스타일 */
+/* TrendBotTabs.css - AI 추세 봇 탭 (라이트 모드) */
 
 .trend-bot-tabs {
     width: 100%;
@@ -7,14 +7,16 @@
 .ai-trend-header {
     display: flex;
     align-items: center;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
-    color: #5856d6;
+    color: #1d1d1f;
     margin-bottom: 20px;
-    padding: 12px 0;
-    border-bottom: 2px solid #5856d6;
+    padding: 12px 16px;
+    background: #f5f5f7;
+    border-radius: 12px;
 }
 
 .ai-trend-header .anticon {
-    font-size: 20px;
+    font-size: 18px;
+    color: #5856d6;
 }
