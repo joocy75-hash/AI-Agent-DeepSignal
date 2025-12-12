@@ -308,10 +308,10 @@ export default function Trading() {
                             {selectedStrategyObj && (
                                 <div style={{ background: '#f0f5ff', padding: 12, borderRadius: 8 }}>
                                     <Text strong style={{ display: 'block', marginBottom: 8 }}>선택된 전략</Text>
-                                    <Space wrap>
-                                        <Tag color="blue">{selectedStrategyObj.type}</Tag>
-                                        <Tag color="purple">{selectedStrategyObj.symbol}</Tag>
-                                        <Tag color="green">{selectedStrategyObj.timeframe}</Tag>
+                                    <Space wrap size={[4, 4]}>
+                                        <Tag color="blue" style={{ margin: 0 }}>{selectedStrategyObj.type}</Tag>
+                                        <Tag color="purple" style={{ margin: 0 }}>{selectedStrategyObj.symbol}</Tag>
+                                        <Tag color="cyan" style={{ margin: 0 }}>{selectedStrategyObj.timeframe}</Tag>
                                     </Space>
                                 </div>
                             )}
@@ -389,12 +389,12 @@ export default function Trading() {
 
                             {/* Strategy Info */}
                             <div style={{ marginBottom: 12 }}>
-                                <Space wrap size={[8, 8]}>
-                                    <Tag color="blue">{selectedStrategyObj.type || 'AI'}</Tag>
-                                    <Tag color="purple">{selectedStrategyObj.symbol}</Tag>
-                                    <Tag color="cyan">{selectedStrategyObj.timeframe}</Tag>
+                                <Space wrap size={[4, 4]}>
+                                    <Tag color="blue" style={{ margin: 0 }}>{selectedStrategyObj.type || 'AI'}</Tag>
+                                    <Tag color="purple" style={{ margin: 0 }}>{selectedStrategyObj.symbol}</Tag>
+                                    <Tag color="cyan" style={{ margin: 0 }}>{selectedStrategyObj.timeframe}</Tag>
                                     {selectedStrategyObj.leverage && (
-                                        <Tag color="orange">x{selectedStrategyObj.leverage}</Tag>
+                                        <Tag color="orange" style={{ margin: 0 }}>x{selectedStrategyObj.leverage}</Tag>
                                     )}
                                 </Space>
                             </div>
