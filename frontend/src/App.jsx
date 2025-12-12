@@ -24,6 +24,7 @@ const BacktestingPage = lazy(() => import('./pages/BacktestingPage'));
 const BotManagement = lazy(() => import('./pages/BotManagement'));
 
 // Admin pages
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const GridTemplateManager = lazy(() => import('./pages/admin/GridTemplateManager'));
 
 // Loading spinner component - Clean & Minimal
@@ -202,6 +203,14 @@ function App() {
                     />
 
                     {/* Admin Routes */}
+                    <Route
+                      path="/admin"
+                      element={
+                        <ProtectedRoute>
+                          <AdminDashboard />
+                        </ProtectedRoute>
+                      }
+                    />
                     <Route
                       path="/admin/grid-templates"
                       element={
