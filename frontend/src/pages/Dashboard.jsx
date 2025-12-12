@@ -513,19 +513,16 @@ export default function Dashboard() {
     }
   };
 
-  // 최적화: 모든 기간 데이터를 한번에 로드
+  // 최적화: 통합 API로 모든 기간 데이터를 한번에 로드 (5개 API -> 1개)
   const loadAllAnalytics = async () => {
     try {
-      // 모든 API를 병렬로 호출
-      const [riskMetrics, perfAll, perfDaily, perfWeekly, perfMonthly] = await Promise.all([
-        analyticsAPI.getRiskMetrics(),
-        analyticsAPI.getPerformanceMetrics('all'),
-        analyticsAPI.getPerformanceMetrics('1d'),
-        analyticsAPI.getPerformanceMetrics('1w'),
-        analyticsAPI.getPerformanceMetrics('1m'),
-      ]);
+      // 통합 API 한번 호출로 모든 데이터 가져오기
+      const summary = await analyticsAPI.getDashboardSummary();
 
       // tradeStats 설정
+      const perfAll = summary.performance_all || {};
+      const riskMetrics = summary.risk_metrics || {};
+
       setTradeStats({
         totalTrades: riskMetrics.total_trades || 0,
         winRate: riskMetrics.win_rate || 0,
@@ -542,6 +539,10 @@ export default function Dashboard() {
       });
 
       // periodProfits 설정
+      const perfDaily = summary.performance_daily || {};
+      const perfWeekly = summary.performance_weekly || {};
+      const perfMonthly = summary.performance_monthly || {};
+
       setPeriodProfits({
         daily: { return: perfDaily.total_return || 0, pnl: perfDaily.total_pnl || 0 },
         weekly: { return: perfWeekly.total_return || 0, pnl: perfWeekly.total_pnl || 0 },

@@ -6,10 +6,9 @@ Analytics API endpoints
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database.db import get_session
@@ -21,6 +20,268 @@ logger = logging.getLogger(__name__)
 structured_logger = get_logger(__name__)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+
+@router.get("/dashboard-summary")
+async def get_dashboard_summary(
+    session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    대시보드 요약 데이터 가져오기 (통합 API)
+
+    여러 개의 API 호출을 하나로 통합하여 성능 최적화
+
+    Returns:
+        - risk_metrics: 리스크 지표
+        - performance_all: 전체 성과
+        - performance_daily: 일간 성과
+        - performance_weekly: 주간 성과
+        - performance_monthly: 월간 성과
+    """
+    from ..utils.cache_manager import cache_manager, make_cache_key
+
+    # 캐시 확인 (15초 TTL - 대시보드는 빠른 갱신 필요)
+    cache_key = make_cache_key("dashboard_summary", user_id)
+    cached_data = await cache_manager.get(cache_key)
+    if cached_data is not None:
+        logger.debug(f"Cache hit for dashboard_summary user {user_id}")
+        return cached_data
+
+    try:
+        structured_logger.info(
+            "dashboard_summary_requested",
+            "Dashboard summary requested",
+            user_id=user_id,
+        )
+
+        # 기간별 날짜 계산
+        now = datetime.utcnow()
+        cutoff_1d = now - timedelta(days=1)
+        cutoff_1w = now - timedelta(days=7)
+        cutoff_1m = now - timedelta(days=30)
+
+        # 모든 거래 데이터를 한번에 조회 (가장 큰 범위로)
+        result = await session.execute(
+            select(Trade)
+            .where(
+                Trade.user_id == user_id,
+                Trade.exit_price.isnot(None),
+                Trade.pnl.isnot(None),
+            )
+            .order_by(Trade.created_at.desc())
+        )
+        all_trades = result.scalars().all()
+
+        # Equity 데이터도 한번에 조회
+        equity_result = await session.execute(
+            select(Equity)
+            .where(Equity.user_id == user_id)
+            .order_by(Equity.timestamp.asc())
+        )
+        all_equities = equity_result.scalars().all()
+
+        def calculate_performance(trades, equities, period):
+            """기간별 성과 계산 헬퍼 함수"""
+            if not trades:
+                return {
+                    "total_return": 0.0,
+                    "total_pnl": 0.0,
+                    "total_trades": 0,
+                    "winning_trades": 0,
+                    "losing_trades": 0,
+                    "best_trade": None,
+                    "worst_trade": None,
+                }
+
+            total_pnl = sum(float(t.pnl) for t in trades if t.pnl is not None)
+            winning = [t for t in trades if t.pnl and t.pnl > 0]
+            losing = [t for t in trades if t.pnl and t.pnl < 0]
+
+            best_trade = None
+            worst_trade = None
+            valid_trades = [t for t in trades if t.pnl is not None]
+            if valid_trades:
+                best = max(valid_trades, key=lambda t: float(t.pnl))
+                worst = min(valid_trades, key=lambda t: float(t.pnl))
+                best_trade = {
+                    "symbol": best.symbol,
+                    "pnl": float(best.pnl) if best.pnl else 0.0,
+                    "pnl_percent": float(best.pnl_percent) if best.pnl_percent else 0.0,
+                }
+                worst_trade = {
+                    "symbol": worst.symbol,
+                    "pnl": float(worst.pnl) if worst.pnl else 0.0,
+                    "pnl_percent": float(worst.pnl_percent)
+                    if worst.pnl_percent
+                    else 0.0,
+                }
+
+            # 수익률 계산
+            total_return = 0.0
+            if equities and len(equities) > 1:
+                try:
+                    initial = float(equities[0].value) if equities[0].value else 0
+                    final = float(equities[-1].value) if equities[-1].value else 0
+                    if initial > 0:
+                        total_return = ((final - initial) / initial) * 100
+                except Exception:
+                    pass
+
+            return {
+                "total_return": round(total_return, 2),
+                "total_pnl": round(total_pnl, 2),
+                "total_trades": len(trades),
+                "winning_trades": len(winning),
+                "losing_trades": len(losing),
+                "best_trade": best_trade,
+                "worst_trade": worst_trade,
+            }
+
+        def calculate_risk_metrics(trades, equities):
+            """리스크 지표 계산 헬퍼 함수"""
+            if not trades:
+                return {
+                    "max_drawdown": 0.0,
+                    "sharpe_ratio": 0.0,
+                    "win_rate": 0.0,
+                    "profit_loss_ratio": 0.0,
+                    "daily_volatility": 0.0,
+                    "total_trades": 0,
+                }
+
+            winning = [t for t in trades if t.pnl and t.pnl > 0]
+            losing = [t for t in trades if t.pnl and t.pnl < 0]
+            total = len(trades)
+
+            win_rate = (len(winning) / total) * 100 if total > 0 else 0
+
+            avg_win = (
+                sum(float(t.pnl) for t in winning) / len(winning) if winning else 0
+            )
+            avg_loss = (
+                abs(sum(float(t.pnl) for t in losing) / len(losing)) if losing else 1
+            )
+            profit_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 0
+
+            max_drawdown = 0.0
+            daily_volatility = 0.0
+            sharpe_ratio = 0.0
+
+            if equities and len(equities) > 1:
+                try:
+                    peak = float(equities[0].value) if equities[0].value else 0
+                    for eq in equities:
+                        if eq.value is None:
+                            continue
+                        val = float(eq.value)
+                        if val > peak:
+                            peak = val
+                        if peak > 0:
+                            dd = ((val - peak) / peak) * 100
+                            if dd < max_drawdown:
+                                max_drawdown = dd
+
+                    returns = []
+                    for i in range(1, len(equities)):
+                        if equities[i].value and equities[i - 1].value:
+                            prev = float(equities[i - 1].value)
+                            curr = float(equities[i].value)
+                            if prev > 0:
+                                returns.append(((curr - prev) / prev) * 100)
+
+                    if returns and len(returns) > 1:
+                        mean_ret = sum(returns) / len(returns)
+                        variance = sum((r - mean_ret) ** 2 for r in returns) / len(
+                            returns
+                        )
+                        daily_volatility = variance**0.5
+                        sharpe_ratio = (
+                            mean_ret / daily_volatility if daily_volatility > 0 else 0
+                        )
+                except Exception:
+                    pass
+
+            return {
+                "max_drawdown": round(max_drawdown, 2),
+                "sharpe_ratio": round(sharpe_ratio, 2),
+                "win_rate": round(win_rate, 2),
+                "profit_loss_ratio": round(profit_loss_ratio, 2),
+                "daily_volatility": round(daily_volatility, 2),
+                "total_trades": total,
+            }
+
+        # 기간별 거래 필터링
+        trades_1d = [t for t in all_trades if t.created_at >= cutoff_1d]
+        trades_1w = [t for t in all_trades if t.created_at >= cutoff_1w]
+        trades_1m = [t for t in all_trades if t.created_at >= cutoff_1m]
+
+        # Equity 필터링
+        eq_1d = [e for e in all_equities if e.timestamp >= cutoff_1d]
+        eq_1w = [e for e in all_equities if e.timestamp >= cutoff_1w]
+        eq_1m = [e for e in all_equities if e.timestamp >= cutoff_1m]
+
+        response = {
+            "risk_metrics": calculate_risk_metrics(all_trades, all_equities),
+            "performance_all": calculate_performance(all_trades, all_equities, "all"),
+            "performance_daily": calculate_performance(trades_1d, eq_1d, "1d"),
+            "performance_weekly": calculate_performance(trades_1w, eq_1w, "1w"),
+            "performance_monthly": calculate_performance(trades_1m, eq_1m, "1m"),
+            "cached_at": datetime.utcnow().isoformat(),
+        }
+
+        # 캐시에 저장 (15초 TTL)
+        await cache_manager.set(cache_key, response, ttl=15)
+        logger.debug(f"Cached dashboard_summary for user {user_id}")
+
+        structured_logger.info(
+            "dashboard_summary_calculated",
+            f"Dashboard summary calculated: {len(all_trades)} total trades",
+            user_id=user_id,
+            total_trades=len(all_trades),
+        )
+
+        return response
+
+    except Exception as e:
+        structured_logger.error(
+            "dashboard_summary_failed",
+            "Failed to get dashboard summary",
+            user_id=user_id,
+            error=str(e),
+        )
+        # 에러 시 기본값 반환
+        return {
+            "risk_metrics": {
+                "max_drawdown": 0.0,
+                "sharpe_ratio": 0.0,
+                "win_rate": 0.0,
+                "profit_loss_ratio": 0.0,
+                "daily_volatility": 0.0,
+                "total_trades": 0,
+            },
+            "performance_all": {
+                "total_return": 0.0,
+                "total_pnl": 0.0,
+                "total_trades": 0,
+            },
+            "performance_daily": {
+                "total_return": 0.0,
+                "total_pnl": 0.0,
+                "total_trades": 0,
+            },
+            "performance_weekly": {
+                "total_return": 0.0,
+                "total_pnl": 0.0,
+                "total_trades": 0,
+            },
+            "performance_monthly": {
+                "total_return": 0.0,
+                "total_pnl": 0.0,
+                "total_trades": 0,
+            },
+            "error": str(e),
+        }
 
 
 @router.get("/equity-curve")

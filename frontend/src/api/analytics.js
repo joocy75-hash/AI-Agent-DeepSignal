@@ -1,9 +1,22 @@
-import axios from 'axios';
+import apiClient from './client';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-// Analytics API 클라이언트
+// Analytics API 클라이언트 (최적화 버전)
 export const analyticsAPI = {
+    /**
+     * 대시보드 요약 데이터 가져오기 (통합 API - 권장)
+     * 여러 개의 API 호출을 한번에 처리 (5개 -> 1개)
+     * @returns {Promise} 대시보드 요약 데이터
+     */
+    getDashboardSummary: async () => {
+        try {
+            const response = await apiClient.get('/analytics/dashboard-summary');
+            return response.data;
+        } catch (error) {
+            console.error('[Analytics API] Dashboard summary error:', error);
+            throw error;
+        }
+    },
+
     /**
      * 자산 곡선 데이터 가져오기
      * @param {string} period - 기간 (1d, 1w, 1m, 3m, 1y, all)
@@ -11,10 +24,8 @@ export const analyticsAPI = {
      */
     getEquityCurve: async (period = '1m') => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_URL}/analytics/equity-curve`, {
+            const response = await apiClient.get('/analytics/equity-curve', {
                 params: { period },
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             return response.data;
         } catch (error) {
@@ -29,10 +40,7 @@ export const analyticsAPI = {
      */
     getRiskMetrics: async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_URL}/analytics/risk-metrics`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-            });
+            const response = await apiClient.get('/analytics/risk-metrics');
             return response.data;
         } catch (error) {
             console.error('[Analytics API] Risk metrics error:', error);
@@ -47,10 +55,8 @@ export const analyticsAPI = {
      */
     getPerformanceMetrics: async (period = '1m') => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_URL}/analytics/performance`, {
+            const response = await apiClient.get('/analytics/performance', {
                 params: { period },
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             return response.data;
         } catch (error) {
@@ -68,14 +74,12 @@ export const analyticsAPI = {
      */
     getReport: async (reportType = 'monthly', startDate, endDate) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_URL}/analytics/report`, {
+            const response = await apiClient.get('/analytics/report', {
                 params: {
                     type: reportType,
                     start_date: startDate,
                     end_date: endDate,
                 },
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             return response.data;
         } catch (error) {
@@ -86,8 +90,10 @@ export const analyticsAPI = {
 };
 
 // 편의 함수 exports
+export const getDashboardSummary = analyticsAPI.getDashboardSummary;
 export const getEquityCurve = analyticsAPI.getEquityCurve;
 export const getPerformance = analyticsAPI.getPerformanceMetrics;
 export const getRiskMetrics = analyticsAPI.getRiskMetrics;
 
 export default analyticsAPI;
+
