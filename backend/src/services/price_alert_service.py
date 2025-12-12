@@ -4,6 +4,7 @@ Price Alert Service
 차트 어노테이션의 가격 알림(price_level)을 모니터링하고
 가격이 설정된 레벨에 도달하면 알림을 전송하는 서비스
 """
+
 import asyncio
 import logging
 from datetime import datetime
@@ -75,11 +76,12 @@ class PriceAlertService:
         try:
             async with AsyncSessionLocal() as session:
                 # 해당 심볼의 활성화된 가격 알림 조회
+                # annotation_type을 문자열로 비교 (DB enum 소문자와 일치)
                 result = await session.execute(
                     select(ChartAnnotation).where(
                         and_(
                             ChartAnnotation.symbol == symbol.upper(),
-                            ChartAnnotation.annotation_type == AnnotationType.PRICE_LEVEL,
+                            ChartAnnotation.annotation_type == "price_level",
                             ChartAnnotation.is_active == True,
                             ChartAnnotation.alert_enabled == True,
                             ChartAnnotation.alert_triggered == False,
@@ -155,11 +157,7 @@ class PriceAlertService:
                 message = f"🔔 {alert.label}\n" + message.split("\n", 1)[1]
 
             # WebSocket으로 알림 전송
-            await WebSocketManager.send_alert(
-                alert.user_id,
-                "INFO",
-                message
-            )
+            await WebSocketManager.send_alert(alert.user_id, "INFO", message)
 
             # 가격 알림 전용 이벤트도 전송
             await WebSocketManager.broadcast_to_user(
@@ -175,7 +173,7 @@ class PriceAlertService:
                         "label": alert.label,
                     },
                     "timestamp": datetime.utcnow().isoformat() + "Z",
-                }
+                },
             )
 
             logger.info(
