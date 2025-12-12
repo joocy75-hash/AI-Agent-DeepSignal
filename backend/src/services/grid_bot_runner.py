@@ -64,17 +64,9 @@ class GridBotRunner:
 
     def is_running(self, bot_instance_id: int) -> bool:
         """봇이 실행 중인지 확인"""
-        return (
-            bot_instance_id in self.tasks
-            and not self.tasks[bot_instance_id].done()
-        )
+        return bot_instance_id in self.tasks and not self.tasks[bot_instance_id].done()
 
-    async def start(
-        self,
-        session_factory,
-        bot_instance_id: int,
-        user_id: int
-    ):
+    async def start(self, session_factory, bot_instance_id: int, user_id: int):
         """그리드 봇 시작"""
         if self.is_running(bot_instance_id):
             logger.warning(f"Grid bot {bot_instance_id} is already running")
@@ -101,11 +93,7 @@ class GridBotRunner:
     # ============================================================
 
     def calculate_grid_prices(
-        self,
-        lower_price: float,
-        upper_price: float,
-        grid_count: int,
-        mode: GridMode
+        self, lower_price: float, upper_price: float, grid_count: int, mode: GridMode
     ) -> List[float]:
         """
         그리드 가격 계산
@@ -126,15 +114,12 @@ class GridBotRunner:
         else:
             # 등비 그리드: 비율 간격 균등
             ratio = (upper_price / lower_price) ** (1 / (grid_count - 1))
-            prices = [lower_price * (ratio ** i) for i in range(grid_count)]
+            prices = [lower_price * (ratio**i) for i in range(grid_count)]
 
         return [round(p, 8) for p in prices]
 
     def calculate_per_grid_amount(
-        self,
-        total_investment: float,
-        grid_count: int,
-        leverage: int = 1
+        self, total_investment: float, grid_count: int, leverage: int = 1
     ) -> float:
         """
         그리드당 투자금 계산
@@ -152,10 +137,7 @@ class GridBotRunner:
         return (total_investment * leverage) / effective_grids
 
     def calculate_order_qty(
-        self,
-        investment_per_grid: float,
-        price: float,
-        min_qty: float = 0.001
+        self, investment_per_grid: float, price: float, min_qty: float = 0.001
     ) -> float:
         """
         주문 수량 계산
@@ -175,14 +157,11 @@ class GridBotRunner:
     # 메인 실행 루프
     # ============================================================
 
-    async def _run_grid_loop(
-        self,
-        session_factory,
-        bot_instance_id: int,
-        user_id: int
-    ):
+    async def _run_grid_loop(self, session_factory, bot_instance_id: int, user_id: int):
         """그리드 봇 메인 루프"""
-        logger.info(f"Starting grid bot loop: bot_id={bot_instance_id}, user_id={user_id}")
+        logger.info(
+            f"Starting grid bot loop: bot_id={bot_instance_id}, user_id={user_id}"
+        )
 
         try:
             async with session_factory() as session:
@@ -193,7 +172,9 @@ class GridBotRunner:
 
                 if not grid_config:
                     logger.error(f"Grid config not found for bot {bot_instance_id}")
-                    await self._update_bot_error(session, bot_instance_id, "GRID_CONFIG_NOT_FOUND")
+                    await self._update_bot_error(
+                        session, bot_instance_id, "GRID_CONFIG_NOT_FOUND"
+                    )
                     return
 
                 logger.info(
@@ -206,7 +187,9 @@ class GridBotRunner:
                     bitget_client = await self._init_bitget_client(session, user_id)
                 except InvalidApiKeyError as e:
                     logger.error(f"Invalid API key for user {user_id}: {e}")
-                    await self._update_bot_error(session, bot_instance_id, "INVALID_API_KEY")
+                    await self._update_bot_error(
+                        session, bot_instance_id, "INVALID_API_KEY"
+                    )
                     return
 
                 # 3. 그리드 가격 계산
@@ -214,7 +197,7 @@ class GridBotRunner:
                     float(grid_config.lower_price),
                     float(grid_config.upper_price),
                     grid_config.grid_count,
-                    grid_config.grid_mode
+                    grid_config.grid_mode,
                 )
 
                 # 4. 그리드 주문 초기화 (DB에 없으면 생성)
@@ -228,8 +211,12 @@ class GridBotRunner:
 
                 if current_price:
                     await self._setup_initial_orders(
-                        session, bitget_client, bot_instance, grid_config,
-                        grid_orders, current_price
+                        session,
+                        bitget_client,
+                        bot_instance,
+                        grid_config,
+                        grid_orders,
+                        current_price,
                     )
 
                 # 6. 체결 모니터링 루프
@@ -240,21 +227,24 @@ class GridBotRunner:
                 last_check_time = datetime.utcnow()
                 check_interval_seconds = 3  # 최소 체결 확인 간격
 
-                logger.info(f"Grid bot {bot_instance_id}: Starting price monitoring loop (queue + REST fallback)")
+                logger.info(
+                    f"Grid bot {bot_instance_id}: Starting price monitoring loop (queue + REST fallback)"
+                )
 
                 while not self._stop_flags.get(bot_instance_id, False):
                     try:
                         # market_queue에서 가격 데이터 수신 시도
                         try:
                             market_data = await asyncio.wait_for(
-                                self.market_queue.get(),
-                                timeout=queue_timeout
+                                self.market_queue.get(), timeout=queue_timeout
                             )
                             # 심볼 매칭 확인
                             market_symbol = market_data.get("symbol", "")
                             if market_symbol == symbol or symbol in market_symbol:
                                 current_price = float(market_data.get("price", 0))
-                                logger.debug(f"Grid bot {bot_instance_id}: Price from queue: ${current_price:.2f}")
+                                logger.debug(
+                                    f"Grid bot {bot_instance_id}: Price from queue: ${current_price:.2f}"
+                                )
                             else:
                                 # 다른 심볼 데이터는 다시 큐에 넣음 (다른 봇용)
                                 # 단, 큐가 가득 차면 버림
@@ -265,9 +255,13 @@ class GridBotRunner:
                                 continue
                         except asyncio.TimeoutError:
                             # 타임아웃 시 REST API 폴백
-                            current_price = await self._get_current_price(bitget_client, symbol)
+                            current_price = await self._get_current_price(
+                                bitget_client, symbol
+                            )
                             if current_price:
-                                logger.debug(f"Grid bot {bot_instance_id}: Price from REST: ${current_price:.2f}")
+                                logger.debug(
+                                    f"Grid bot {bot_instance_id}: Price from REST: ${current_price:.2f}"
+                                )
 
                         # 최소 간격 체크 (너무 자주 체결 확인하지 않도록)
                         now = datetime.utcnow()
@@ -278,8 +272,12 @@ class GridBotRunner:
                         if current_price and current_price > 0:
                             # 체결 확인 및 주문 갱신
                             await self._check_and_update_orders(
-                                session, bitget_client, bot_instance, grid_config,
-                                grid_orders, current_price
+                                session,
+                                bitget_client,
+                                bot_instance,
+                                grid_config,
+                                grid_orders,
+                                current_price,
                             )
                             last_check_time = now
 
@@ -289,10 +287,12 @@ class GridBotRunner:
                         consecutive_errors += 1
                         logger.error(
                             f"Grid bot {bot_instance_id} error ({consecutive_errors}/{max_errors}): {e}",
-                            exc_info=True
+                            exc_info=True,
                         )
                         if consecutive_errors >= max_errors:
-                            await self._update_bot_error(session, bot_instance_id, "TOO_MANY_ERRORS")
+                            await self._update_bot_error(
+                                session, bot_instance_id, "TOO_MANY_ERRORS"
+                            )
                             break
                         await asyncio.sleep(queue_timeout)
 
@@ -307,7 +307,9 @@ class GridBotRunner:
             raise
 
         except Exception as exc:
-            logger.error(f"Fatal error in grid bot {bot_instance_id}: {exc}", exc_info=True)
+            logger.error(
+                f"Fatal error in grid bot {bot_instance_id}: {exc}", exc_info=True
+            )
 
         finally:
             if bot_instance_id in self.tasks:
@@ -327,14 +329,14 @@ class GridBotRunner:
         bot_instance: BotInstance,
         grid_config: GridBotConfig,
         grid_orders: List[GridOrder],
-        current_price: float
+        current_price: float,
     ):
         """초기 매수 주문 설정 (현재 가격 이하의 그리드)"""
         symbol = bot_instance.symbol
         per_grid = self.calculate_per_grid_amount(
             float(grid_config.total_investment),
             grid_config.grid_count,
-            bot_instance.max_leverage
+            bot_instance.max_leverage,
         )
 
         placed_count = 0
@@ -368,10 +370,14 @@ class GridBotRunner:
                         )
 
                 except Exception as e:
-                    logger.error(f"Failed to place buy order at grid {order.grid_index}: {e}")
+                    logger.error(
+                        f"Failed to place buy order at grid {order.grid_index}: {e}"
+                    )
 
         await session.commit()
-        logger.info(f"Initial orders: {placed_count} buy orders placed out of {len(grid_orders)} grids")
+        logger.info(
+            f"Initial orders: {placed_count} buy orders placed out of {len(grid_orders)} grids"
+        )
 
     async def _check_and_update_orders(
         self,
@@ -380,21 +386,23 @@ class GridBotRunner:
         bot_instance: BotInstance,
         grid_config: GridBotConfig,
         grid_orders: List[GridOrder],
-        current_price: float
+        current_price: float,
     ):
         """체결 확인 및 주문 갱신"""
         symbol = bot_instance.symbol
         per_grid = self.calculate_per_grid_amount(
             float(grid_config.total_investment),
             grid_config.grid_count,
-            bot_instance.max_leverage
+            bot_instance.max_leverage,
         )
 
         for order in grid_orders:
             try:
                 # 1. 매수 주문 체결 확인
                 if order.status == GridOrderStatus.BUY_PLACED and order.buy_order_id:
-                    filled = await self._check_order_filled(bitget_client, order.buy_order_id, symbol)
+                    filled = await self._check_order_filled(
+                        bitget_client, order.buy_order_id, symbol
+                    )
 
                     if filled:
                         filled_price, filled_qty = filled
@@ -414,19 +422,30 @@ class GridBotRunner:
                             order.grid_index,
                             "buy_filled",
                             filled_price,
-                            filled_qty
+                            filled_qty,
                         )
 
                         # 매도 주문 설정 (한 단계 위 가격)
-                        sell_price = self._get_next_sell_price(grid_orders, order.grid_index)
+                        sell_price = self._get_next_sell_price(
+                            grid_orders, order.grid_index
+                        )
                         if sell_price:
                             await self._place_sell_order(
-                                session, bitget_client, bot_instance, order, sell_price, filled_qty
+                                session,
+                                bitget_client,
+                                bot_instance,
+                                order,
+                                sell_price,
+                                filled_qty,
                             )
 
                 # 2. 매도 주문 체결 확인
-                elif order.status == GridOrderStatus.SELL_PLACED and order.sell_order_id:
-                    filled = await self._check_order_filled(bitget_client, order.sell_order_id, symbol)
+                elif (
+                    order.status == GridOrderStatus.SELL_PLACED and order.sell_order_id
+                ):
+                    filled = await self._check_order_filled(
+                        bitget_client, order.sell_order_id, symbol
+                    )
 
                     if filled:
                         filled_price, filled_qty = filled
@@ -453,7 +472,7 @@ class GridBotRunner:
                             profit,
                             buy_price,
                             filled_price,
-                            filled_qty
+                            filled_qty,
                         )
 
                         # 거래 기록
@@ -482,7 +501,7 @@ class GridBotRunner:
         bot_instance: BotInstance,
         order: GridOrder,
         sell_price: float,
-        qty: float
+        qty: float,
     ):
         """매도 주문 설정"""
         try:
@@ -513,7 +532,7 @@ class GridBotRunner:
         bitget_client,
         bot_instance: BotInstance,
         order: GridOrder,
-        per_grid: float
+        per_grid: float,
     ):
         """그리드 사이클 재시작 (매수 주문 재설정)"""
         grid_price = float(order.grid_price)
@@ -541,7 +560,9 @@ class GridBotRunner:
                 order.sell_filled_at = None
                 order.status = GridOrderStatus.BUY_PLACED
 
-                logger.info(f"Grid {order.grid_index}: Cycle restarted with buy order at ${grid_price:.2f}")
+                logger.info(
+                    f"Grid {order.grid_index}: Cycle restarted with buy order at ${grid_price:.2f}"
+                )
 
         except Exception as e:
             logger.error(f"Failed to restart grid cycle {order.grid_index}: {e}")
@@ -550,7 +571,9 @@ class GridBotRunner:
     # 헬퍼 메서드
     # ============================================================
 
-    def _get_next_sell_price(self, grid_orders: List[GridOrder], current_index: int) -> Optional[float]:
+    def _get_next_sell_price(
+        self, grid_orders: List[GridOrder], current_index: int
+    ) -> Optional[float]:
         """다음 그리드 가격 (매도 가격) 반환"""
         for order in grid_orders:
             if order.grid_index == current_index + 1:
@@ -558,10 +581,7 @@ class GridBotRunner:
         return None
 
     async def _check_order_filled(
-        self,
-        bitget_client,
-        order_id: str,
-        symbol: str
+        self, bitget_client, order_id: str, symbol: str
     ) -> Optional[Tuple[float, float]]:
         """주문 체결 확인 - 체결 시 (가격, 수량) 반환"""
         try:
@@ -587,10 +607,7 @@ class GridBotRunner:
             return None
 
     async def _load_grid_config(
-        self,
-        session: AsyncSession,
-        bot_instance_id: int,
-        user_id: int
+        self, session: AsyncSession, bot_instance_id: int, user_id: int
     ) -> Tuple[Optional[BotInstance], Optional[GridBotConfig]]:
         """봇 인스턴스 및 그리드 설정 로드"""
         result = await session.execute(
@@ -600,22 +617,19 @@ class GridBotRunner:
                 and_(
                     BotInstance.id == bot_instance_id,
                     BotInstance.user_id == user_id,
-                    BotInstance.bot_type == BotType.GRID,
-                    BotInstance.is_active == True
+                    BotInstance.is_active == True,
                 )
             )
         )
         bot = result.scalar_one_or_none()
 
-        if bot:
+        # 그리드 봇인지 확인 (grid_config 존재 여부로 판별)
+        if bot and bot.grid_config:
             return bot, bot.grid_config
         return None, None
 
     async def _initialize_grid_orders(
-        self,
-        session: AsyncSession,
-        grid_config_id: int,
-        grid_prices: List[float]
+        self, session: AsyncSession, grid_config_id: int, grid_prices: List[float]
     ) -> List[GridOrder]:
         """그리드 주문 레코드 초기화"""
         # 기존 주문 조회
@@ -636,7 +650,7 @@ class GridBotRunner:
                 grid_config_id=grid_config_id,
                 grid_index=i,
                 grid_price=Decimal(str(price)),
-                status=GridOrderStatus.PENDING
+                status=GridOrderStatus.PENDING,
             )
             session.add(order)
             orders.append(order)
@@ -647,9 +661,7 @@ class GridBotRunner:
 
     async def _init_bitget_client(self, session: AsyncSession, user_id: int):
         """Bitget 클라이언트 초기화"""
-        result = await session.execute(
-            select(ApiKey).where(ApiKey.user_id == user_id)
-        )
+        result = await session.execute(select(ApiKey).where(ApiKey.user_id == user_id))
         api_key_obj = result.scalars().first()
 
         if not api_key_obj:
@@ -666,10 +678,7 @@ class GridBotRunner:
         return get_bitget_rest(api_key, api_secret, passphrase)
 
     async def _update_bot_error(
-        self,
-        session: AsyncSession,
-        bot_instance_id: int,
-        error_msg: str
+        self, session: AsyncSession, bot_instance_id: int, error_msg: str
     ):
         """봇 에러 상태 업데이트"""
         await session.execute(
@@ -694,7 +703,7 @@ class GridBotRunner:
         session: AsyncSession,
         bot_instance: BotInstance,
         order: GridOrder,
-        profit: float
+        profit: float,
     ):
         """그리드 거래 기록"""
         trade = Trade(
@@ -707,7 +716,12 @@ class GridBotRunner:
             entry_price=order.buy_filled_price,
             exit_price=order.sell_filled_price,
             pnl=Decimal(str(profit)),
-            pnl_percent=Decimal(str((profit / float(order.buy_filled_price * order.buy_filled_qty)) * 100)),
+            pnl_percent=Decimal(
+                str(
+                    (profit / float(order.buy_filled_price * order.buy_filled_qty))
+                    * 100
+                )
+            ),
             leverage=bot_instance.max_leverage,
             exit_reason=f"Grid {order.grid_index} cycle complete",
         )
@@ -715,10 +729,7 @@ class GridBotRunner:
         await session.commit()
 
     async def _notify_grid_profit(
-        self,
-        bot_instance: BotInstance,
-        order: GridOrder,
-        profit: float
+        self, bot_instance: BotInstance, order: GridOrder, profit: float
     ):
         """그리드 수익 알림 (텔레그램)"""
         try:
@@ -730,7 +741,16 @@ class GridBotRunner:
                     entry_price=float(order.buy_filled_price),
                     exit_price=float(order.sell_filled_price),
                     quantity=float(order.sell_filled_qty),
-                    pnl_percent=float((profit / (float(order.buy_filled_price) * float(order.buy_filled_qty))) * 100),
+                    pnl_percent=float(
+                        (
+                            profit
+                            / (
+                                float(order.buy_filled_price)
+                                * float(order.buy_filled_qty)
+                            )
+                        )
+                        * 100
+                    ),
                     pnl_usdt=profit,
                     exit_reason=f"Grid #{order.grid_index} (Bot: {bot_instance.name})",
                     duration_minutes=0,
@@ -746,11 +766,12 @@ class GridBotRunner:
         grid_index: int,
         status: str,
         price: float,
-        qty: float
+        qty: float,
     ):
         """그리드 주문 상태 WebSocket 알림 (NEW)"""
         try:
             from ..websockets.ws_server import WebSocketManager
+
             await WebSocketManager.send_grid_order_update(
                 user_id,
                 {
@@ -759,7 +780,7 @@ class GridBotRunner:
                     "status": status,
                     "price": price,
                     "qty": qty,
-                }
+                },
             )
         except Exception as e:
             logger.debug(f"WebSocket grid order update failed: {e}")
@@ -772,11 +793,12 @@ class GridBotRunner:
         profit: float,
         buy_price: float,
         sell_price: float,
-        qty: float
+        qty: float,
     ):
         """그리드 사이클 완료 WebSocket 알림 (NEW)"""
         try:
             from ..websockets.ws_server import WebSocketManager
+
             await WebSocketManager.send_grid_cycle_complete(
                 user_id,
                 {
@@ -786,7 +808,7 @@ class GridBotRunner:
                     "buy_price": buy_price,
                     "sell_price": sell_price,
                     "qty": qty,
-                }
+                },
             )
         except Exception as e:
             logger.debug(f"WebSocket grid cycle complete failed: {e}")
@@ -812,6 +834,7 @@ class GridBotRunnerProxy:
     BotRunner에서 import할 때 market_queue가 없어도 import 가능하도록 함.
     실제 사용 시점에 BotRunner의 market_queue로 초기화됨.
     """
+
     _instance: Optional[GridBotRunner] = None
 
     @classmethod
