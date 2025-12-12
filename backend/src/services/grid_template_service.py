@@ -4,6 +4,7 @@ Grid Template Service
 - 통계 업데이트
 - 템플릿으로 봇 생성
 """
+
 import math
 from decimal import Decimal
 from typing import List, Optional
@@ -22,7 +23,7 @@ from ..database.models import (
 from ..schemas.grid_template_schema import (
     GridTemplateCreate,
     GridTemplateUpdate,
-    UseTemplateRequest
+    UseTemplateRequest,
 )
 
 
@@ -35,10 +36,7 @@ class GridTemplateService:
     # ===== 조회 =====
 
     async def get_active_templates(
-        self,
-        symbol: Optional[str] = None,
-        limit: int = 50,
-        offset: int = 0
+        self, symbol: Optional[str] = None, limit: int = 50, offset: int = 0
     ) -> List[GridBotTemplate]:
         """
         활성화된 템플릿 목록 조회 (사용자용)
@@ -51,7 +49,7 @@ class GridTemplateService:
             .order_by(
                 GridBotTemplate.is_featured.desc(),
                 GridBotTemplate.sort_order.asc(),
-                GridBotTemplate.backtest_roi_30d.desc().nullslast()
+                GridBotTemplate.backtest_roi_30d.desc().nullslast(),
             )
             .offset(offset)
             .limit(limit)
@@ -71,13 +69,11 @@ class GridTemplateService:
         return result.scalar_one_or_none()
 
     async def get_all_templates(
-        self,
-        include_inactive: bool = False
+        self, include_inactive: bool = False
     ) -> List[GridBotTemplate]:
         """모든 템플릿 조회 (관리자용)"""
         query = select(GridBotTemplate).order_by(
-            GridBotTemplate.sort_order.asc(),
-            GridBotTemplate.created_at.desc()
+            GridBotTemplate.sort_order.asc(), GridBotTemplate.created_at.desc()
         )
 
         if not include_inactive:
@@ -89,9 +85,7 @@ class GridTemplateService:
     # ===== 생성/수정/삭제 =====
 
     async def create_template(
-        self,
-        data: GridTemplateCreate,
-        created_by: int
+        self, data: GridTemplateCreate, created_by: int
     ) -> GridBotTemplate:
         """템플릿 생성 (관리자)"""
         template = GridBotTemplate(
@@ -111,7 +105,7 @@ class GridTemplateService:
             is_active=data.is_active,
             is_featured=data.is_featured,
             sort_order=data.sort_order,
-            created_by=created_by
+            created_by=created_by,
         )
         self.db.add(template)
         await self.db.commit()
@@ -119,9 +113,7 @@ class GridTemplateService:
         return template
 
     async def update_template(
-        self,
-        template_id: int,
-        data: GridTemplateUpdate
+        self, template_id: int, data: GridTemplateUpdate
     ) -> Optional[GridBotTemplate]:
         """템플릿 수정 (관리자)"""
         template = await self.get_template_by_id(template_id)
@@ -160,10 +152,7 @@ class GridTemplateService:
     # ===== 템플릿 사용 (봇 생성) =====
 
     async def use_template(
-        self,
-        template_id: int,
-        user_id: int,
-        request: UseTemplateRequest
+        self, template_id: int, user_id: int, request: UseTemplateRequest
     ) -> tuple[BotInstance, GridBotConfig]:
         """
         템플릿으로 봇 인스턴스 생성
@@ -185,9 +174,7 @@ class GridTemplateService:
 
         # 2. 최소 투자금액 검증
         if request.investment_amount < template.min_investment:
-            raise ValueError(
-                f"Minimum investment is {template.min_investment} USDT"
-            )
+            raise ValueError(f"Minimum investment is {template.min_investment} USDT")
 
         # 레버리지 결정 (요청값 or 템플릿 기본값)
         leverage = request.leverage or template.leverage
@@ -201,17 +188,15 @@ class GridTemplateService:
             max_leverage=leverage,
             template_id=template.id,
             is_active=True,
-            is_running=False,
-            allocation_percent=Decimal('10.0')  # 기본값
+            is_running=True,  # 생성 후 자동 시작
+            allocation_percent=Decimal("10.0"),  # 기본값
         )
         self.db.add(bot_instance)
         await self.db.flush()  # ID 할당
 
         # 4. GridBotConfig 생성
         per_grid_amount = self._calculate_per_grid_amount(
-            request.investment_amount,
-            template.grid_count,
-            leverage
+            request.investment_amount, template.grid_count, leverage
         )
 
         grid_config = GridBotConfig(
@@ -221,7 +206,7 @@ class GridTemplateService:
             grid_count=template.grid_count,
             grid_mode=template.grid_mode,
             total_investment=request.investment_amount,
-            per_grid_amount=per_grid_amount
+            per_grid_amount=per_grid_amount,
         )
         self.db.add(grid_config)
         await self.db.flush()
@@ -231,7 +216,7 @@ class GridTemplateService:
             template.lower_price,
             template.upper_price,
             template.grid_count,
-            template.grid_mode
+            template.grid_mode,
         )
 
         for idx, price in enumerate(grid_prices):
@@ -239,14 +224,16 @@ class GridTemplateService:
                 grid_config_id=grid_config.id,
                 grid_index=idx,
                 grid_price=price,
-                status=GridOrderStatus.PENDING
+                status=GridOrderStatus.PENDING,
             )
             self.db.add(grid_order)
 
         # 6. 템플릿 통계 업데이트
         template.active_users = (template.active_users or 0) + 1
         template.total_users = (template.total_users or 0) + 1
-        template.total_funds_in_use = Decimal(str(template.total_funds_in_use or 0)) + request.investment_amount
+        template.total_funds_in_use = (
+            Decimal(str(template.total_funds_in_use or 0)) + request.investment_amount
+        )
 
         await self.db.commit()
         await self.db.refresh(bot_instance)
@@ -256,17 +243,15 @@ class GridTemplateService:
 
     # ===== 통계 업데이트 =====
 
-    async def decrement_active_user(
-        self,
-        template_id: int,
-        investment_amount: Decimal
-    ):
+    async def decrement_active_user(self, template_id: int, investment_amount: Decimal):
         """봇 종료 시 활성 사용자 감소"""
         template = await self.get_template_by_id(template_id)
         if template and template.active_users > 0:
             template.active_users -= 1
             current_funds = Decimal(str(template.total_funds_in_use or 0))
-            template.total_funds_in_use = max(Decimal('0'), current_funds - investment_amount)
+            template.total_funds_in_use = max(
+                Decimal("0"), current_funds - investment_amount
+            )
             await self.db.commit()
 
     # ===== 백테스트 결과 저장 =====
@@ -278,7 +263,7 @@ class GridTemplateService:
         max_drawdown: Decimal,
         total_trades: int,
         win_rate: Decimal,
-        roi_history: List[float]
+        roi_history: List[float],
     ) -> Optional[GridBotTemplate]:
         """백테스트 결과 저장"""
         from datetime import datetime
@@ -301,10 +286,7 @@ class GridTemplateService:
     # ===== Helper 함수 =====
 
     def _calculate_per_grid_amount(
-        self,
-        total_investment: Decimal,
-        grid_count: int,
-        leverage: int
+        self, total_investment: Decimal, grid_count: int, leverage: int
     ) -> Decimal:
         """그리드당 투자금액 계산"""
         return (total_investment * leverage) / grid_count
@@ -314,7 +296,7 @@ class GridTemplateService:
         lower_price: Decimal,
         upper_price: Decimal,
         grid_count: int,
-        grid_mode: GridMode
+        grid_mode: GridMode,
     ) -> List[Decimal]:
         """그리드 가격 배열 계산"""
         prices = []

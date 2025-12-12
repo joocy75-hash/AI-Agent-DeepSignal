@@ -59,7 +59,7 @@ const UseTrendTemplateModal = ({
 
     useEffect(() => {
         if (template) {
-            const minInv = Math.ceil(parseFloat(template.min_investment) || 50);
+            const minInv = Math.ceil(parseFloat(template.min_investment) || 10);
             setInvestmentAmount(minInv);
             setLeverage(template.leverage || 5);
         }
@@ -90,7 +90,7 @@ const UseTrendTemplateModal = ({
                 leverage: leverage,
             });
 
-            message.success('🎉 AI 추세 봇이 생성되었습니다!');
+            message.success('🎉 AI 추세 봇이 생성되고 자동 시작되었습니다!');
             onSuccess?.(result);
             onClose();
         } catch (error) {
@@ -103,7 +103,7 @@ const UseTrendTemplateModal = ({
 
     if (!template) return null;
 
-    const minInvestment = Math.ceil(parseFloat(template.min_investment) || 50);
+    const minInvestment = Math.ceil(parseFloat(template.min_investment) || 10);
     const roiValue = template.backtest_roi_30d || 0;
     const winRate = template.backtest_win_rate || 0;
     const isLong = template.direction === 'long';

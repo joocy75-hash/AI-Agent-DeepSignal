@@ -3,6 +3,7 @@ Grid Bot Template Schemas
 - 관리자 템플릿 CRUD용 스키마
 - 사용자 조회/사용용 스키마
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
@@ -13,8 +14,10 @@ from ..database.models import GridMode, PositionDirection
 
 # ===== 기본 스키마 =====
 
+
 class GridTemplateBase(BaseModel):
     """템플릿 기본 필드"""
+
     name: str = Field(..., min_length=1, max_length=100)
     symbol: str = Field(..., min_length=3, max_length=20)
     direction: PositionDirection
@@ -32,14 +35,14 @@ class GridTemplateBase(BaseModel):
     description: Optional[str] = None
     tags: Optional[List[str]] = None
 
-    @field_validator('upper_price')
+    @field_validator("upper_price")
     @classmethod
     def upper_must_be_greater_than_lower(cls, v, info):
-        if 'lower_price' in info.data and v <= info.data['lower_price']:
-            raise ValueError('upper_price must be greater than lower_price')
+        if "lower_price" in info.data and v <= info.data["lower_price"]:
+            raise ValueError("upper_price must be greater than lower_price")
         return v
 
-    @field_validator('symbol')
+    @field_validator("symbol")
     @classmethod
     def symbol_must_be_uppercase(cls, v):
         return v.upper()
@@ -47,8 +50,10 @@ class GridTemplateBase(BaseModel):
 
 # ===== 관리자용 스키마 =====
 
+
 class GridTemplateCreate(GridTemplateBase):
     """템플릿 생성 요청 (관리자)"""
+
     is_active: bool = True
     is_featured: bool = False
     sort_order: int = 0
@@ -56,6 +61,7 @@ class GridTemplateCreate(GridTemplateBase):
 
 class GridTemplateUpdate(BaseModel):
     """템플릿 수정 요청 (관리자)"""
+
     name: Optional[str] = None
     lower_price: Optional[Decimal] = None
     upper_price: Optional[Decimal] = None
@@ -77,19 +83,22 @@ class GridTemplateUpdate(BaseModel):
 
 class BacktestResultSchema(BaseModel):
     """백테스트 결과"""
-    roi_30d: Decimal                  # 30일 ROI %
-    max_drawdown: Decimal             # 최대 낙폭 %
-    total_trades: int                 # 총 거래 수
-    win_rate: Decimal                 # 승률 %
-    roi_history: List[float]          # 일별 ROI 배열 (30개)
+
+    roi_30d: Decimal  # 30일 ROI %
+    max_drawdown: Decimal  # 최대 낙폭 %
+    total_trades: int  # 총 거래 수
+    win_rate: Decimal  # 승률 %
+    roi_history: List[float]  # 일별 ROI 배열 (30개)
 
     model_config = {"from_attributes": True}
 
 
 # ===== 사용자용 스키마 =====
 
+
 class GridTemplateListItem(BaseModel):
     """템플릿 목록 아이템 (사용자)"""
+
     id: int
     name: str
     symbol: str
@@ -117,6 +126,7 @@ class GridTemplateListItem(BaseModel):
 
 class GridTemplateDetail(GridTemplateListItem):
     """템플릿 상세 정보 (사용자)"""
+
     # 추가 필드
     upper_price: float
     lower_price: float
@@ -135,19 +145,23 @@ class GridTemplateDetail(GridTemplateListItem):
 
 class UseTemplateRequest(BaseModel):
     """템플릿 사용 요청 (봇 생성)"""
-    investment_amount: Decimal = Field(..., gt=0)
-    leverage: Optional[int] = Field(default=None, ge=1, le=125)  # None이면 템플릿 기본값
 
-    @field_validator('investment_amount')
+    investment_amount: Decimal = Field(..., gt=0)
+    leverage: Optional[int] = Field(
+        default=None, ge=1, le=125
+    )  # None이면 템플릿 기본값
+
+    @field_validator("investment_amount")
     @classmethod
     def validate_investment(cls, v):
-        if v < 5:  # 최소 $5
-            raise ValueError('Minimum investment is $5')
+        if v < 10:  # 최소 $10
+            raise ValueError("Minimum investment is $10")
         return v
 
 
 class UseTemplateResponse(BaseModel):
     """템플릿 사용 응답 (생성된 봇 정보)"""
+
     bot_instance_id: int
     grid_config_id: int
     message: str = "Bot created successfully from template"
@@ -155,8 +169,10 @@ class UseTemplateResponse(BaseModel):
 
 # ===== 관리자 응답용 =====
 
+
 class GridTemplateAdminDetail(BaseModel):
     """관리자용 상세 정보"""
+
     id: int
     name: str
     symbol: str
@@ -206,8 +222,10 @@ class GridTemplateAdminDetail(BaseModel):
 
 # ===== 응답 래퍼 =====
 
+
 class GridTemplateListResponse(BaseModel):
     """템플릿 목록 응답"""
+
     success: bool = True
     data: List[GridTemplateListItem]
     total: int
@@ -215,5 +233,6 @@ class GridTemplateListResponse(BaseModel):
 
 class GridTemplateDetailResponse(BaseModel):
     """템플릿 상세 응답"""
+
     success: bool = True
     data: GridTemplateDetail

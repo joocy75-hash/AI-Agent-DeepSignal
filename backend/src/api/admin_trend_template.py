@@ -31,7 +31,7 @@ class TrendTemplateCreate(BaseModel):
     leverage: int = Field(default=5, ge=1, le=125)
     stop_loss_percent: float = Field(default=2.0, ge=0.1, le=50)
     take_profit_percent: float = Field(default=4.0, ge=0.1, le=100)
-    min_investment: float = Field(default=50.0, ge=10)
+    min_investment: float = Field(default=10.0, ge=10)
     recommended_investment: Optional[float] = None
     risk_level: str = "medium"
     tags: Optional[List[str]] = None

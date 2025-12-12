@@ -201,10 +201,10 @@ async def save_grid_config(
     # 그리드당 투자금 계산
     per_grid_amount = config.total_investment / config.grid_count
 
-    if per_grid_amount < 5:
+    if per_grid_amount < 2:
         raise HTTPException(
             status_code=400,
-            detail=f"그리드당 투자금이 너무 작습니다 (${per_grid_amount:.2f}). 최소 $5 이상이어야 합니다.",
+            detail=f"그리드당 투자금이 너무 작습니다 (${per_grid_amount:.2f}). 최소 $2 이상이어야 합니다.",
         )
 
     # 기존 설정이 있으면 업데이트, 없으면 생성

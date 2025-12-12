@@ -83,7 +83,7 @@ const UseTemplateModal = ({
                 leverage: leverage,
             });
 
-            message.success('🎉 그리드 봇이 생성되었습니다!');
+            message.success('🎉 그리드 봇이 생성되고 자동 시작되었습니다!');
             onSuccess?.(result);
             onClose();
         } catch (error) {

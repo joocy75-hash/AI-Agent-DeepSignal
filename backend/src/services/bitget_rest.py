@@ -610,22 +610,51 @@ class BitgetRestClient:
             청산 응답
         """
         # 포지션 조회
-        position = await self.get_single_position(symbol, margin_coin)
+        result = await self.get_single_position(symbol, margin_coin)
+
+        # API 응답이 리스트인 경우 처리
+        positions = []
+        if isinstance(result, list):
+            positions = result
+        elif isinstance(result, dict):
+            if result.get("data"):
+                positions = (
+                    result["data"]
+                    if isinstance(result["data"], list)
+                    else [result["data"]]
+                )
+            else:
+                positions = [result]
+
+        # 요청한 방향의 포지션 찾기
+        target_side = side.value.lower()  # "long" or "short"
+        position = None
+
+        for pos in positions:
+            pos_side = (pos.get("holdSide") or pos.get("posSide") or "").lower()
+            pos_size = float(pos.get("total") or pos.get("available") or 0)
+
+            # 방향이 일치하고 수량이 있는 포지션
+            if pos_side == target_side and pos_size > 0:
+                position = pos
+                break
 
         if not position:
-            logger.warning(f"No position found for {symbol}")
-            return {"success": False, "message": "No position to close"}
+            logger.warning(f"No {side.value} position found for {symbol}")
+            return {"success": False, "message": f"No {side.value} position to close"}
 
         # 포지션 수량
         if size is None:
-            size = float(position.get("total", 0))
+            size = float(position.get("total") or position.get("available") or 0)
 
         if size == 0:
-            logger.warning(f"Position size is 0 for {symbol}")
+            logger.warning(f"Position size is 0 for {symbol} {side.value}")
             return {"success": False, "message": "Position size is 0"}
 
         # 청산 주문 (반대 방향)
         order_side = OrderSide.SELL if side == PositionSide.LONG else OrderSide.BUY
+
+        logger.info(f"Closing {side.value} position for {symbol}: size={size}")
 
         return await self.place_market_order(
             symbol=symbol,

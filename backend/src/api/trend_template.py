@@ -98,7 +98,7 @@ def template_to_list_item(template: TrendBotTemplate) -> dict:
         if template.backtest_max_drawdown
         else None,
         "recommended_period": template.recommended_period,
-        "min_investment": float(template.min_investment or 50),
+        "min_investment": float(template.min_investment or 10),
         "risk_level": template.risk_level or "medium",
         "active_users": template.active_users or 0,
         "is_featured": template.is_featured,
@@ -220,7 +220,7 @@ async def use_trend_template(
         raise HTTPException(status_code=400, detail="Template is not available")
 
     # 최소 투자금액 확인
-    min_investment = float(template.min_investment or 50)
+    min_investment = float(template.min_investment or 10)
     if request.investment_amount < min_investment:
         raise HTTPException(
             status_code=400, detail=f"Minimum investment is {min_investment} USDT"
@@ -241,7 +241,7 @@ async def use_trend_template(
             stop_loss_percent=template.stop_loss_percent,
             take_profit_percent=template.take_profit_percent,
             allocation_percent=10.0,  # 기본 할당
-            is_running=False,
+            is_running=True,  # 생성 후 자동 시작
             is_active=True,
             telegram_notify=True,
         )
