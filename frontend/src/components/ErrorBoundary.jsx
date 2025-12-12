@@ -65,33 +65,139 @@ class ErrorBoundary extends Component {
             justifyContent: 'center',
             minHeight: '100vh',
             padding: '2rem',
+            background: '#fafafa',
           }}
         >
-          <Result
-            status="error"
-            title="문제가 발생했습니다"
-            subTitle="애플리케이션에서 예기치 않은 오류가 발생했습니다. 페이지를 새로고침하거나 잠시 후 다시 시도해주세요."
-            extra={[
-              <Button type="primary" key="reload" onClick={this.handleReset}>
-                페이지 새로고침
-              </Button>,
-              <Button key="home" onClick={() => window.location.href = '/dashboard'}>
-                대시보드로 이동
-              </Button>,
-            ]}
+          <div
+            style={{
+              textAlign: 'center',
+              maxWidth: '480px',
+              width: '100%',
+            }}
           >
+            {/* Error Icon */}
+            <div
+              style={{
+                width: '80px',
+                height: '80px',
+                margin: '0 auto 32px',
+                borderRadius: '50%',
+                background: '#ff3b30',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 8px 24px rgba(255, 59, 48, 0.2)',
+              }}
+            >
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </div>
+
+            {/* Title */}
+            <h1
+              style={{
+                fontSize: '24px',
+                fontWeight: 600,
+                color: '#1d1d1f',
+                marginBottom: '12px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              문제가 발생했습니다
+            </h1>
+
+            {/* Description */}
+            <p
+              style={{
+                fontSize: '15px',
+                color: '#86868b',
+                lineHeight: 1.6,
+                marginBottom: '32px',
+              }}
+            >
+              애플리케이션에서 예기치 않은 오류가 발생했습니다.
+              <br />
+              페이지가 고장났거나 삭제되었습니다. 다시 시도해보세요.
+            </p>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <Button
+                type="primary"
+                size="large"
+                onClick={this.handleReset}
+                style={{
+                  height: '48px',
+                  padding: '0 32px',
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  borderRadius: '12px',
+                  background: '#0071e3',
+                  border: 'none',
+                }}
+              >
+                페이지 새로고침
+              </Button>
+              <Button
+                size="large"
+                onClick={() => (window.location.href = '/dashboard')}
+                style={{
+                  height: '48px',
+                  padding: '0 32px',
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  borderRadius: '12px',
+                  background: 'white',
+                  border: '1px solid #d2d2d7',
+                  color: '#1d1d1f',
+                }}
+              >
+                대시보드로 이동
+              </Button>
+            </div>
+
+            {/* Development Error Details */}
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <div
                 style={{
-                  marginTop: '2rem',
-                  padding: '1rem',
-                  background: '#f5f5f5',
-                  borderRadius: '4px',
+                  marginTop: '48px',
+                  padding: '20px',
+                  background: 'white',
+                  borderRadius: '16px',
+                  border: '1px solid #e8e8ed',
                   textAlign: 'left',
                 }}
               >
-                <h4>개발 모드 에러 정보:</h4>
-                <pre style={{ fontSize: '12px', overflow: 'auto' }}>
+                <h4
+                  style={{
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#1d1d1f',
+                    marginBottom: '12px',
+                  }}
+                >
+                  개발 모드 에러 정보:
+                </h4>
+                <pre
+                  style={{
+                    fontSize: '12px',
+                    overflow: 'auto',
+                    color: '#515154',
+                    lineHeight: 1.6,
+                    margin: 0,
+                  }}
+                >
                   <strong>Error:</strong> {this.state.error.toString()}
                   {'\n\n'}
                   <strong>Component Stack:</strong>
@@ -99,7 +205,7 @@ class ErrorBoundary extends Component {
                 </pre>
               </div>
             )}
-          </Result>
+          </div>
         </div>
       );
     }

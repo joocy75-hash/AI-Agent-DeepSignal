@@ -601,7 +601,18 @@ class GridBotRunner:
         """현재 가격 조회"""
         try:
             ticker = await bitget_client.get_ticker(symbol)
-            return float(ticker.get("lastPr", 0))
+
+            # Bitget API v2는 리스트로 반환함
+            if isinstance(ticker, list) and len(ticker) > 0:
+                price = float(ticker[0].get("lastPr", 0))
+            elif isinstance(ticker, dict):
+                # 딕셔너리인 경우도 처리 (하위 호환성)
+                price = float(ticker.get("lastPr", 0))
+            else:
+                logger.warning(f"Unexpected ticker format for {symbol}: {type(ticker)}")
+                return None
+
+            return price if price > 0 else None
         except Exception as e:
             logger.error(f"Failed to get current price for {symbol}: {e}")
             return None

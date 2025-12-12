@@ -1,0 +1,127 @@
+/* BacktestRunner.css */
+
+.backtest-runner-modal .ant-modal-content {
+    background: #0d0d1a;
+    border-radius: 16px;
+}
+
+.backtest-runner-modal .ant-modal-header {
+    background: #0d0d1a;
+    border-bottom: 1px solid #2d2d44;
+}
+
+.backtest-runner-modal .ant-modal-title {
+    color: #fff;
+}
+
+.template-info {
+    background: #1a1a2e;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.template-info h4 {
+    color: #fff;
+    margin: 0 0 8px 0;
+}
+
+.template-tags {
+    display: flex;
+    gap: 8px;
+}
+
+.template-tags .tag {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #2d2d44;
+    color: #a0a0b0;
+}
+
+.template-tags .tag.direction.long {
+    background: rgba(0, 184, 148, 0.2);
+    color: #00b894;
+}
+
+.template-tags .tag.direction.short {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
+.backtest-settings {
+    margin-bottom: 24px;
+}
+
+.backtest-settings .ant-form-item-label>label {
+    color: #a0a0b0;
+}
+
+.backtest-settings .ant-select-selector {
+    background: #1a1a2e !important;
+    border-color: #2d2d44 !important;
+    color: #fff !important;
+}
+
+.loading-container {
+    text-align: center;
+    padding: 40px 0;
+}
+
+.loading-container p {
+    color: #a0a0b0;
+    margin-top: 16px;
+}
+
+.loading-container .loading-info {
+    color: #666;
+    font-size: 12px;
+}
+
+.backtest-results {
+    margin-top: 16px;
+}
+
+.stat-card {
+    background: #1a1a2e;
+    border: 1px solid #2d2d44;
+}
+
+.stat-card .ant-statistic-title {
+    color: #666;
+    font-size: 12px;
+}
+
+.stat-card .ant-statistic-content {
+    color: #fff;
+}
+
+.roi-chart-section {
+    margin-top: 24px;
+    padding: 16px;
+    background: #1a1a2e;
+    border-radius: 8px;
+}
+
+.roi-chart-section h5 {
+    color: #a0a0b0;
+    margin: 0 0 12px 0;
+    font-size: 12px;
+}
+
+.meta-info {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: #666;
+}
+
+.meta-info span {
+    margin: 0 8px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

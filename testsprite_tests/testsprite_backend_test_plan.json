@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "health check endpoint returns system status",
+    "description": "Verify that the /health GET endpoint returns a 200 status code indicating the system is healthy."
+  },
+  {
+    "id": "TC002",
+    "title": "user registration with valid data",
+    "description": "Test the /auth/register POST endpoint with valid email, password, and username to ensure user is created successfully and returns 201 status."
+  },
+  {
+    "id": "TC003",
+    "title": "user login returns jwt tokens",
+    "description": "Test the /auth/login POST endpoint with valid credentials to verify it returns access_token and refresh_token with 200 status."
+  },
+  {
+    "id": "TC004",
+    "title": "two factor authentication setup and verification",
+    "description": "Verify the /2fa/setup POST endpoint returns a QR code and secret for 2FA setup, and /2fa/verify POST endpoint correctly verifies a valid TOTP code."
+  },
+  {
+    "id": "TC005",
+    "title": "account api keys configuration and balance retrieval",
+    "description": "Test /account/keys POST endpoint to save exchange API keys and /account/balance GET endpoint to retrieve user balance, including error when keys are not configured."
+  },
+  {
+    "id": "TC006",
+    "title": "bot start stop and status endpoints",
+    "description": "Verify /bot/start POST starts a trading bot with given parameters, /bot/stop POST stops the bot and closes positions, and /bot/status GET returns current bot running status."
+  },
+  {
+    "id": "TC007",
+    "title": "grid bot creation and control",
+    "description": "Test /grid-bot POST to create a grid bot with parameters, /grid-bot/{bot_id}/start POST to start the grid bot, and /grid-bot/{bot_id}/stop POST to stop the grid bot."
+  },
+  {
+    "id": "TC008",
+    "title": "order submission and position closing",
+    "description": "Verify /order/submit POST accepts valid order parameters and submits order, and /order/close/{position_id} POST closes the specified position."
+  },
+  {
+    "id": "TC009",
+    "title": "positions retrieval endpoint",
+    "description": "Test /positions GET endpoint returns a list of all open positions for the authenticated user."
+  },
+  {
+    "id": "TC010",
+    "title": "market chart candle data retrieval",
+    "description": "Verify /chart/candles/{symbol} GET endpoint returns candle data for the specified symbol and interval query parameter."
+  }
+]

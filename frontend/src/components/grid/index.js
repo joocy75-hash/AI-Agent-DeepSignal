@@ -7,3 +7,7 @@
 export { default as GridVisualizer } from './GridVisualizer';
 export { default as GridBotCard } from './GridBotCard';
 export { default as CreateGridBotModal } from './CreateGridBotModal';
+export { default as GridBotTabs } from './GridBotTabs';
+
+// Templates
+export * from './templates';

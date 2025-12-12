@@ -1,5 +1,6 @@
-from pydantic import BaseModel, field_validator
-from typing import Optional, Dict, Any
+from decimal import Decimal
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Dict, Any, List
 from ..utils.validators import (
     validate_file_path,
     validate_positive_number,
@@ -7,6 +8,7 @@ from ..utils.validators import (
     ValidationRules,
     sanitize_html
 )
+from ..database.models import GridMode, PositionDirection
 
 
 class BacktestStartRequest(BaseModel):
@@ -55,3 +57,56 @@ class BacktestStartRequest(BaseModel):
             return v
         except ValueError:
             raise ValueError(f"Invalid date format: {v}. Expected YYYY-MM-DD")
+
+
+# ===== Grid Bot Backtest Schemas =====
+
+class GridBacktestRequest(BaseModel):
+    """그리드봇 백테스트 요청 (관리자용 직접 테스트)"""
+    symbol: str = Field(..., min_length=3, max_length=20)
+    direction: PositionDirection
+    lower_price: Decimal = Field(..., gt=0)
+    upper_price: Decimal = Field(..., gt=0)
+    grid_count: int = Field(..., ge=2, le=200)
+    grid_mode: GridMode = GridMode.ARITHMETIC
+    leverage: int = Field(default=5, ge=1, le=125)
+    investment: Decimal = Field(default=Decimal('1000'), gt=0)
+    days: int = Field(default=30, ge=7, le=90)
+    granularity: str = Field(default="5m")
+
+    model_config = {"from_attributes": True}
+
+
+class GridBacktestResponse(BaseModel):
+    """그리드봇 백테스트 응답"""
+    success: bool = True
+
+    # 주요 지표
+    roi_30d: float              # 30일 ROI (%)
+    max_drawdown: float         # 최대 낙폭 (%)
+    total_trades: int           # 총 거래 수
+    win_rate: float             # 승률 (%)
+
+    # 수익 정보
+    total_profit: float         # 총 수익 (USDT)
+    avg_profit_per_trade: float  # 거래당 평균 수익
+
+    # 차트 데이터
+    daily_roi: List[float]      # 일별 누적 ROI (30개)
+
+    # 메타 정보
+    backtest_days: int
+    total_candles: int
+    grid_cycles_completed: int
+
+    model_config = {"from_attributes": True}
+
+
+class GridBacktestSummary(BaseModel):
+    """간단한 백테스트 결과 요약"""
+    roi_30d: float
+    max_drawdown: float
+    win_rate: float
+    total_trades: int
+
+    model_config = {"from_attributes": True}

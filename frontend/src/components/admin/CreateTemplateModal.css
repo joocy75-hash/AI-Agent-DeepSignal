@@ -1,0 +1,137 @@
+/* CreateTemplateModal.css */
+
+.create-template-modal .ant-modal-content {
+    background: #0d0d1a;
+    border-radius: 16px;
+}
+
+.create-template-modal .ant-modal-header {
+    background: #0d0d1a;
+    border-bottom: 1px solid #2d2d44;
+}
+
+.create-template-modal .ant-modal-title {
+    color: #fff;
+}
+
+.create-template-modal .ant-modal-close {
+    color: #666;
+}
+
+.template-steps {
+    margin-bottom: 24px;
+    padding: 0 16px;
+}
+
+.template-steps .ant-steps-item-title {
+    color: #a0a0b0 !important;
+}
+
+.template-steps .ant-steps-item-active .ant-steps-item-title {
+    color: #fff !important;
+}
+
+.template-steps .ant-steps-item-finish .ant-steps-icon {
+    color: #00b894;
+}
+
+.template-form {
+    padding: 0 16px;
+}
+
+.template-form .ant-form-item-label>label {
+    color: #a0a0b0;
+}
+
+.template-form .ant-input,
+.template-form .ant-input-number,
+.template-form .ant-select-selector {
+    background: #1a1a2e !important;
+    border-color: #2d2d44 !important;
+    color: #fff !important;
+}
+
+.template-form .ant-input::placeholder,
+.template-form .ant-input-number-input::placeholder {
+    color: #666 !important;
+}
+
+.template-form .ant-radio-button-wrapper {
+    background: #1a1a2e;
+    border-color: #2d2d44;
+    color: #a0a0b0;
+}
+
+.template-form .ant-radio-button-wrapper-checked {
+    background: #00b894;
+    border-color: #00b894;
+    color: #fff;
+}
+
+.step-content {
+    min-height: 300px;
+}
+
+.review-step h4 {
+    color: #fff;
+    margin-bottom: 16px;
+}
+
+.review-section {
+    background: #1a1a2e;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.review-section h5 {
+    color: #00b894;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.review-section p {
+    color: #a0a0b0;
+    margin-bottom: 8px;
+}
+
+.review-section p strong {
+    color: #fff;
+}
+
+.backtest-section {
+    margin-top: 24px;
+}
+
+.backtest-section h5 {
+    color: #fff;
+    margin-bottom: 12px;
+}
+
+.backtest-loading {
+    margin-top: 16px;
+    color: #a0a0b0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.backtest-result-card {
+    margin-top: 16px;
+    background: #1a1a2e;
+    border: 1px solid #2d2d44;
+}
+
+.backtest-result-card .ant-statistic-title {
+    color: #666;
+}
+
+.backtest-result-card .ant-statistic-content {
+    color: #fff;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

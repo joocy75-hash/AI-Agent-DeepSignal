@@ -1,0 +1,190 @@
+/* TemplateCard.css - Bitget 스타일 */
+
+.template-card {
+    background: #1a1a2e;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    position: relative;
+    border: 1px solid #2d2d44;
+    transition: all 0.2s ease;
+}
+
+.template-card:hover {
+    border-color: #3d3d5c;
+    transform: translateY(-2px);
+}
+
+.template-card.featured {
+    border-color: #00b894;
+    box-shadow: 0 0 20px rgba(0, 184, 148, 0.1);
+}
+
+/* Header */
+.template-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.template-symbol-section {
+    flex: 1;
+}
+
+.template-symbol {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    margin: 0 0 8px 0;
+}
+
+.template-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.template-tags .ant-tag {
+    margin: 0;
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 2px 6px;
+    border: none;
+}
+
+.tag-type {
+    background: #2d2d44;
+    color: #a0a0b0;
+}
+
+.tag-direction.long {
+    background: rgba(0, 184, 148, 0.2);
+    color: #00b894;
+}
+
+.tag-direction.short {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
+.tag-leverage {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.use-button {
+    background: #2d2d44;
+    border: 1px solid #3d3d5c;
+    color: #fff;
+    border-radius: 8px;
+    padding: 4px 20px;
+    height: 32px;
+    font-weight: 500;
+}
+
+.use-button:hover {
+    background: #3d3d5c;
+    border-color: #4d4d6c;
+    color: #fff;
+}
+
+/* Body */
+.template-card-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.roi-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.roi-label {
+    font-size: 12px;
+    color: #666;
+}
+
+.roi-value {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.roi-value.positive {
+    color: #00b894;
+}
+
+.roi-value.negative {
+    color: #e74c3c;
+}
+
+.chart-section {
+    flex-shrink: 0;
+}
+
+/* Footer */
+.template-card-footer {
+    border-top: 1px solid #2d2d44;
+    padding-top: 12px;
+}
+
+.footer-row {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.footer-label {
+    color: #666;
+    margin-right: 8px;
+}
+
+.footer-value {
+    color: #a0a0b0;
+    flex: 1;
+}
+
+.user-count {
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Featured Badge */
+.featured-badge {
+    position: absolute;
+    top: 12px;
+    right: 80px;
+    background: linear-gradient(135deg, #00b894, #00cec9);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* 반응형 */
+@media (max-width: 480px) {
+    .template-card-body {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .chart-section {
+        width: 100%;
+    }
+
+    .chart-section svg {
+        width: 100%;
+        height: auto;
+    }
+}

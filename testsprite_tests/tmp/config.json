@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "loginUser": "admin@admin.com",
+  "loginPassword": "admin123",
+  "executionArgs": {
+    "projectName": "auto-dashboard",
+    "projectPath": "/Users/mr.joo/Desktop/auto-dashboard",
+    "testIds": [],
+    "additionalInstruction": "Login with email: admin@admin.com and password: admin123",
+    "envs": {
+      "API_KEY": "sk-user-P8T5oDuLwdo4-mYtN1tmXX7YlhoRkGOyXsRxnUKbogwN3rwWcksaSZCctV7_acH7vjJQQTS7VUiiGrWX2XeyW1IyGhOXCyrs2Ja8hBtpjwFUCN7LnAWntcN3dbyVrOaCcKM"
+    }
+  },
+  "proxy": "http://744d7944-7080-476e-a03a-22f5cde4d7f7:uiP9y34u6p84HUldqvqJBqKIwAHwo3HL@tun.testsprite.com:8080"
+}

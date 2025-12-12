@@ -89,29 +89,33 @@ function ConnectionStatus() {
                     position: 'fixed',
                     bottom: '20px',
                     right: '20px',
-                    padding: '8px 12px',
-                    background: config.bgColor,
-                    border: `1px solid ${config.borderColor}`,
-                    borderRadius: '20px',
+                    padding: '10px 16px',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid #e8e8ed',
+                    borderRadius: '12px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '12px',
+                    gap: '8px',
+                    fontSize: '13px',
                     fontWeight: '500',
-                    color: config.color,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    color: '#1d1d1f',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
                     zIndex: 9999,
                     transition: 'all 0.3s ease',
                 }}
             >
-                <span style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: config.color,
-                    animation: 'pulse 2s infinite',
-                }} />
-                실시간 연결
+                <span
+                    style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: '#34c759',
+                        animation: 'pulse 2s infinite',
+                        boxShadow: '0 0 8px rgba(52, 199, 89, 0.4)',
+                    }}
+                />
+                <span style={{ color: '#34c759', fontWeight: 600 }}>실시간 연결</span>
             </div>
         );
     }
@@ -122,30 +126,44 @@ function ConnectionStatus() {
                 position: 'fixed',
                 bottom: '20px',
                 right: '20px',
-                padding: '12px 16px',
-                background: 'white',
-                border: `2px solid ${config.borderColor}`,
-                borderRadius: '12px',
+                padding: '16px 20px',
+                background: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid #e8e8ed',
+                borderRadius: '16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '8px',
-                minWidth: '200px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                gap: '12px',
+                minWidth: '240px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
                 zIndex: 9999,
                 animation: 'slideIn 0.3s ease',
             }}
         >
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-            }}>
-                <span style={{ fontSize: '16px' }}>{config.icon}</span>
-                <span style={{
-                    fontWeight: 'bold',
-                    color: config.color,
-                    fontSize: '14px',
-                }}>
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                }}
+            >
+                <span
+                    style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: config.color,
+                        flexShrink: 0,
+                    }}
+                />
+                <span
+                    style={{
+                        fontWeight: 600,
+                        color: '#1d1d1f',
+                        fontSize: '14px',
+                        flex: 1,
+                    }}
+                >
                     {config.text}
                 </span>
             </div>
@@ -154,13 +172,13 @@ function ConnectionStatus() {
                 <button
                     onClick={reconnect}
                     style={{
-                        padding: '8px 16px',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        padding: '10px 16px',
+                        background: '#0071e3',
                         color: 'white',
                         border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
+                        borderRadius: '10px',
+                        fontSize: '13px',
+                        fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -169,24 +187,27 @@ function ConnectionStatus() {
                         transition: 'all 0.2s',
                     }}
                     onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(102, 126, 234, 0.3)';
+                        e.currentTarget.style.background = '#0066cc';
+                        e.currentTarget.style.transform = 'scale(1.02)';
                     }}
                     onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.background = '#0071e3';
+                        e.currentTarget.style.transform = 'scale(1)';
                     }}
                 >
-                    🔄 지금 재연결
+                    지금 재연결
                 </button>
             )}
 
             {connectionState === 'failed' && (
-                <div style={{
-                    fontSize: '11px',
-                    color: '#666',
-                    textAlign: 'center',
-                }}>
+                <div
+                    style={{
+                        fontSize: '12px',
+                        color: '#86868b',
+                        textAlign: 'center',
+                        lineHeight: 1.5,
+                    }}
+                >
                     네트워크 상태를 확인하세요
                 </div>
             )}

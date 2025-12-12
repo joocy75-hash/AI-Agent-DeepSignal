@@ -1,0 +1,100 @@
+/* GridTemplateManager.css */
+
+.grid-template-manager {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 32px;
+    background: #0a0a14;
+    min-height: 100vh;
+}
+
+/* 페이지 헤더 */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.header-left {
+    flex: 1;
+}
+
+.page-title {
+    color: #fff !important;
+    margin: 0 0 4px 0 !important;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title .anticon {
+    color: #00b894;
+}
+
+.page-subtitle {
+    color: #666;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.switch-label {
+    color: #a0a0b0;
+}
+
+/* 통계 카드 */
+.stats-row {
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 12px;
+}
+
+.stat-card .ant-statistic-title {
+    color: #666;
+}
+
+.stat-card .ant-statistic-content {
+    color: #fff;
+}
+
+.stat-card .ant-statistic-content-prefix {
+    margin-right: 8px;
+}
+
+/* 테이블 카드 */
+.table-card {
+    background: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 12px;
+}
+
+.table-card .ant-card-body {
+    padding: 16px;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .grid-template-manager {
+        padding: 16px;
+    }
+
+    .page-header {
+        flex-direction: column;
+    }
+
+    .header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+}

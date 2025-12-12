@@ -124,6 +124,12 @@ class GridMode(str, Enum):
     GEOMETRIC = "geometric"    # 기하 간격 (% 비율 동일)
 
 
+class PositionDirection(str, Enum):
+    """포지션 방향 (그리드봇 템플릿용)"""
+    LONG = "long"
+    SHORT = "short"
+
+
 class GridOrderStatus(str, Enum):
     """그리드 주문 상태"""
     PENDING = "pending"          # 주문 대기
@@ -211,9 +217,17 @@ class BotInstance(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # 템플릿 참조 (그리드봇이 템플릿에서 생성된 경우)
+    template_id = Column(
+        Integer,
+        ForeignKey("grid_bot_templates.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
     # Relationships
     user = relationship("User", backref="bot_instances")
     strategy = relationship("Strategy", backref="bot_instances")
+    template = relationship("GridBotTemplate", back_populates="instances")
     grid_config = relationship(
         "GridBotConfig",
         back_populates="bot_instance",
@@ -221,6 +235,86 @@ class BotInstance(Base):
         cascade="all, delete-orphan"
     )
     # trades relationship은 Trade 모델에서 정의
+
+
+class GridBotTemplate(Base):
+    """
+    관리자가 생성한 그리드봇 템플릿
+
+    - 백테스트 결과와 함께 저장
+    - 일반 사용자가 "Use" 버튼으로 복사하여 사용
+    - Bitget AI 탭과 유사한 기능
+    """
+    __tablename__ = "grid_bot_templates"
+
+    __table_args__ = (
+        CheckConstraint("upper_price > lower_price", name="check_template_price_range"),
+        CheckConstraint("grid_count >= 2 AND grid_count <= 200", name="check_template_grid_count"),
+        CheckConstraint("min_investment > 0", name="check_template_min_investment"),
+        Index("ix_grid_bot_templates_symbol", "symbol"),
+        Index("ix_grid_bot_templates_is_active", "is_active"),
+        Index("ix_grid_bot_templates_is_featured", "is_featured"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # ===== 기본 정보 =====
+    name = Column(String(100), nullable=False)  # 템플릿 이름
+    symbol = Column(String(20), nullable=False)  # "SOLUSDT", "BTCUSDT"
+    direction = Column(
+        SQLEnum(PositionDirection, values_callable=lambda e: [x.value for x in e]),
+        nullable=False
+    )  # LONG, SHORT
+    leverage = Column(Integer, default=5, nullable=False)  # 기본 레버리지
+
+    # ===== 그리드 설정 =====
+    lower_price = Column(Numeric(20, 8), nullable=False)  # 하단 가격
+    upper_price = Column(Numeric(20, 8), nullable=False)  # 상단 가격
+    grid_count = Column(Integer, nullable=False)  # 그리드 개수 (2-200)
+    grid_mode = Column(
+        SQLEnum(GridMode, values_callable=lambda e: [x.value for x in e]),
+        default=GridMode.ARITHMETIC,
+        nullable=False
+    )
+
+    # ===== 투자 제한 =====
+    min_investment = Column(Numeric(20, 8), nullable=False)  # 최소 투자금액 (USDT)
+    recommended_investment = Column(Numeric(20, 8), nullable=True)  # 권장 투자금액
+
+    # ===== 백테스트 결과 =====
+    backtest_roi_30d = Column(Numeric(10, 4), nullable=True)  # 30일 ROI (%)
+    backtest_max_drawdown = Column(Numeric(10, 4), nullable=True)  # 최대 낙폭 (%)
+    backtest_total_trades = Column(Integer, nullable=True)  # 총 거래 수
+    backtest_win_rate = Column(Numeric(10, 4), nullable=True)  # 승률 (%)
+    backtest_roi_history = Column(JSON, nullable=True)  # 일별 ROI 배열 (차트용)
+    backtest_updated_at = Column(DateTime, nullable=True)  # 백테스트 실행 시각
+
+    # ===== 추천 정보 =====
+    recommended_period = Column(String(50), nullable=True)  # "7-30 days"
+    description = Column(Text, nullable=True)  # 봇 설명
+    tags = Column(JSON, nullable=True)  # ["stable", "high-risk"] 등
+
+    # ===== 사용 통계 =====
+    active_users = Column(Integer, default=0, nullable=False)  # 현재 사용 중인 유저 수
+    total_users = Column(Integer, default=0, nullable=False)  # 누적 사용자 수
+    total_funds_in_use = Column(Numeric(20, 8), default=0, nullable=False)  # 총 운용 자금 (USDT)
+
+    # ===== 상태 =====
+    is_active = Column(Boolean, default=True, nullable=False)  # 공개 여부
+    is_featured = Column(Boolean, default=False, nullable=False)  # 추천 표시 (상단 노출)
+    sort_order = Column(Integer, default=0, nullable=False)  # 정렬 순서
+
+    # ===== 관리 =====
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # ===== 관계 =====
+    creator = relationship("User", foreign_keys=[created_by], backref="created_templates")
+    instances = relationship("BotInstance", back_populates="template")
+
+    def __repr__(self):
+        return f"<GridBotTemplate {self.symbol} {self.direction.value} {self.leverage}x>"
 
 
 class GridBotConfig(Base):

@@ -23,16 +23,49 @@ const Notifications = lazy(() => import('./pages/Notifications'));
 const BacktestingPage = lazy(() => import('./pages/BacktestingPage'));
 const BotManagement = lazy(() => import('./pages/BotManagement'));
 
-// Loading spinner component
+// Admin pages
+const GridTemplateManager = lazy(() => import('./pages/admin/GridTemplateManager'));
+
+// Loading spinner component - Clean & Minimal
 const PageLoader = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    background: '#f5f5f7'
-  }}>
-    <Spin size="large" tip="로딩 중..." />
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      background: '#fafafa',
+      gap: '24px',
+    }}
+  >
+    <div
+      style={{
+        width: '48px',
+        height: '48px',
+        border: '3px solid #e8e8ed',
+        borderTopColor: '#0071e3',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }}
+    />
+    <style>
+      {`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}
+    </style>
+    <p
+      style={{
+        fontSize: '15px',
+        color: '#86868b',
+        fontWeight: 500,
+        margin: 0,
+      }}
+    >
+      로딩 중...
+    </p>
   </div>
 );
 
@@ -41,7 +74,40 @@ function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>;
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          background: '#fafafa',
+          gap: '24px',
+        }}
+      >
+        <div
+          style={{
+            width: '48px',
+            height: '48px',
+            border: '3px solid #e8e8ed',
+            borderTopColor: '#0071e3',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }}
+        />
+        <p
+          style={{
+            fontSize: '15px',
+            color: '#86868b',
+            fontWeight: 500,
+            margin: 0,
+          }}
+        >
+          인증 확인 중...
+        </p>
+      </div>
+    );
   }
 
   return isAuthenticated ? <MainLayout>{children}</MainLayout> : <Navigate to="/login" />;
@@ -131,6 +197,16 @@ function App() {
                       element={
                         <ProtectedRoute>
                           <BotManagement />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Admin Routes */}
+                    <Route
+                      path="/admin/grid-templates"
+                      element={
+                        <ProtectedRoute>
+                          <GridTemplateManager />
                         </ProtectedRoute>
                       }
                     />

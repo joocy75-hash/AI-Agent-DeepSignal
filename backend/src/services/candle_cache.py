@@ -2,13 +2,21 @@
 캔들 데이터 캐싱 시스템
 
 다중 사용자 백테스트를 위한 공용 캔들 데이터 캐시.
-Bitget API Rate Limit 문제를 해결하고 성능을 최적화합니다.
+API Rate Limit 문제를 해결하고 성능을 최적화합니다.
+
+지원 데이터 소스:
+- Binance Futures API (기본, 권장)
+- Bitget Futures API (대체)
 
 기능:
 1. 공용 캐시: 모든 사용자가 동일한 캔들 데이터 공유
 2. 스마트 갱신: 없는 데이터만 API로 가져옴
 3. Rate Limit 큐: 동시 요청 순차 처리
 4. 파일 기반 영구 저장: 서버 재시작 후에도 유지
+5. 멀티 소스: Binance/Bitget 선택 가능
+
+수정 이력:
+- 2025-12-13: Binance API 지원 추가
 """
 
 import csv
@@ -112,6 +120,7 @@ class CandleCacheManager:
         start_date: str,
         end_date: str,
         cache_only: bool = False,
+        source: str = "binance",
     ) -> List[Dict[str, Any]]:
         """
         캔들 데이터 조회 (캐시 우선)
@@ -125,6 +134,7 @@ class CandleCacheManager:
             start_date: 시작일 (YYYY-MM-DD)
             end_date: 종료일 (YYYY-MM-DD)
             cache_only: True면 API 호출 없이 캐시 데이터만 반환 (Rate Limit 방지)
+            source: 데이터 소스 ("binance" 또는 "bitget", 기본값: binance)
 
         Returns:
             캔들 데이터 리스트
@@ -196,7 +206,7 @@ class CandleCacheManager:
                     f"   ⚠️ Partial cache, fetching {len(missing_ranges)} missing ranges"
                 )
                 new_candles = await self._fetch_missing_ranges(
-                    symbol, timeframe, missing_ranges
+                    symbol, timeframe, missing_ranges, source=source
                 )
                 # 기존 캐시와 합치기
                 all_candles = file_candles + new_candles
@@ -216,8 +226,11 @@ class CandleCacheManager:
             )
             return []
 
-        logger.info(f"   🌐 No cache, fetching from Bitget API...")
-        candles = await self._fetch_from_api(symbol, timeframe, start_date, end_date)
+        source_name = "Binance" if source == "binance" else "Bitget"
+        logger.info(f"   🌐 No cache, fetching from {source_name} API...")
+        candles = await self._fetch_from_api(
+            symbol, timeframe, start_date, end_date, source=source
+        )
 
         if candles:
             # 파일 캐시에 저장
@@ -356,6 +369,7 @@ class CandleCacheManager:
         symbol: str,
         timeframe: str,
         missing_ranges: List[Tuple[int, int]],
+        source: str = "binance",
     ) -> List[Dict]:
         """누락된 기간의 데이터를 API에서 가져옴"""
         all_candles = []
@@ -365,7 +379,7 @@ class CandleCacheManager:
             end_date = datetime.fromtimestamp(end_ts / 1000).strftime("%Y-%m-%d")
 
             candles = await self._fetch_from_api(
-                symbol, timeframe, start_date, end_date
+                symbol, timeframe, start_date, end_date, source=source
             )
             all_candles.extend(candles)
 
@@ -387,9 +401,84 @@ class CandleCacheManager:
         timeframe: str,
         start_date: str,
         end_date: str,
+        source: str = "binance",
+    ) -> List[Dict]:
+        """
+        API에서 캔들 데이터 가져오기 (Rate Limit 관리)
+
+        Args:
+            symbol: 거래쌍 (예: BTCUSDT)
+            timeframe: 타임프레임 (예: 1h)
+            start_date: 시작일 (YYYY-MM-DD)
+            end_date: 종료일 (YYYY-MM-DD)
+            source: 데이터 소스 ("binance" 또는 "bitget")
+
+        Returns:
+            캔들 데이터 리스트
+        """
+        if source == "binance":
+            return await self._fetch_from_binance(
+                symbol, timeframe, start_date, end_date
+            )
+        else:
+            return await self._fetch_from_bitget(
+                symbol, timeframe, start_date, end_date
+            )
+
+    async def _fetch_from_binance(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+    ) -> List[Dict]:
+        """
+        Binance API에서 캔들 데이터 가져오기 (Rate Limit 관리)
+
+        장점:
+        - 요청당 최대 1,500개 캔들 (Bitget: 1,000개)
+        - Rate Limit: 1,200 req/min (Bitget: 20 req/sec)
+        - 더 긴 히스토리 (2019년 9월~)
+        """
+        from .binance_rest import BinanceRestClient
+
+        async with self._rate_limit_lock:
+            # Rate Limit 대기 (Binance는 더 관대함)
+            elapsed = time.time() - self._last_api_call
+            min_interval = 0.1  # 100ms (Binance용)
+            if elapsed < min_interval:
+                await asyncio.sleep(min_interval - elapsed)
+
+            try:
+                client = BinanceRestClient()
+                candles = await client.get_all_historical_klines(
+                    symbol=symbol,
+                    interval=timeframe,
+                    start_time=start_date,
+                    end_time=end_date,
+                )
+                await client.close()
+                self._last_api_call = time.time()
+
+                logger.info(f"   🌐 Fetched {len(candles)} candles from Binance API")
+                return candles
+
+            except Exception as e:
+                logger.error(f"Failed to fetch from Binance API: {e}")
+                raise
+
+    async def _fetch_from_bitget(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
     ) -> List[Dict]:
         """
         Bitget API에서 캔들 데이터 가져오기 (Rate Limit 관리)
+
+        참고: Binance API가 더 나은 성능을 제공하므로
+              특별한 이유가 없다면 Binance 사용 권장
         """
         from .bitget_rest import BitgetRestClient
 

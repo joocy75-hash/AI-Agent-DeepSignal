@@ -22,12 +22,14 @@ from .api import (
     admin_bots,
     admin_analytics,
     admin_logs,
+    admin_grid_template,  # 그리드 템플릿 관리자 API (NEW)
     annotations,  # 차트 어노테이션 API (NEW)
     auth,
     oauth,
     bot,
     bot_instances,  # 다중 봇 시스템 API (NEW)
     grid_bot,  # 그리드 봇 API (NEW)
+    grid_template,  # 그리드 템플릿 사용자 API (NEW)
     strategy,
     account,
     order,
@@ -46,6 +48,7 @@ from .api import (
     upload,
     two_factor,
     telegram,
+    user_backtest,  # 일반 회원용 캐시 백테스트 (NEW)
 )
 from .config import settings
 from .database import db
@@ -242,6 +245,9 @@ def create_app() -> FastAPI:
     app.include_router(bitget_market.router)  # Bitget Market API (NEW)
     app.include_router(upload.router)  # File Upload API (NEW)
     app.include_router(telegram.router)  # Telegram Bot API (NEW)
+    app.include_router(grid_template.router)  # Grid Template 사용자 API (NEW)
+    app.include_router(admin_grid_template.router)  # Grid Template 관리자 API (NEW)
+    app.include_router(user_backtest.router)  # 일반 회원용 캐시 백테스트 (NEW)
     app.include_router(ws_server.router)
 
     # Note: Startup logic has been moved to lifespan in db.py

@@ -1,0 +1,130 @@
+{
+    "tech_stack": [
+        "JavaScript/React",
+        "Python/FastAPI",
+        "SQLite/SQLAlchemy",
+        "Vite",
+        "Ant Design",
+        "Axios",
+        "JWT Authentication",
+        "Bitget API"
+    ],
+    "features": [
+        {
+            "name": "Authentication",
+            "description": "User login, registration, JWT token management with OAuth support (Google, Kakao)",
+            "files": [
+                "frontend/src/pages/Login.jsx",
+                "frontend/src/pages/OAuthCallback.jsx",
+                "frontend/src/context/AuthContext.jsx",
+                "backend/src/api/auth.py",
+                "backend/src/utils/jwt_auth.py"
+            ]
+        },
+        {
+            "name": "Dashboard",
+            "description": "Main dashboard with portfolio overview, balance display, and trading statistics",
+            "files": [
+                "frontend/src/pages/Dashboard.jsx",
+                "frontend/src/components/DashboardHeader.jsx",
+                "frontend/src/components/PortfolioChart.jsx"
+            ]
+        },
+        {
+            "name": "Bot Management",
+            "description": "Create, manage, start/stop trading bots including AI trend bots and Grid bots",
+            "files": [
+                "frontend/src/pages/BotManagement.jsx",
+                "frontend/src/components/grid/GridBotCard.jsx",
+                "frontend/src/components/grid/CreateGridBotModal.jsx",
+                "frontend/src/components/grid/GridBotTabs.jsx",
+                "backend/src/api/bot_instances.py",
+                "backend/src/services/bot_instance_service.py"
+            ]
+        },
+        {
+            "name": "Grid Bot Templates",
+            "description": "AI-recommended grid trading templates with backtesting functionality",
+            "files": [
+                "frontend/src/components/grid/templates/TemplateList.jsx",
+                "frontend/src/components/grid/templates/TemplateCard.jsx",
+                "frontend/src/components/grid/templates/UseTemplateModal.jsx",
+                "frontend/src/components/grid/templates/MiniRoiChart.jsx",
+                "frontend/src/api/gridTemplate.js",
+                "backend/src/api/grid_template.py",
+                "backend/src/services/grid_template_service.py"
+            ]
+        },
+        {
+            "name": "Admin Grid Template Manager",
+            "description": "Admin page for managing grid bot templates, CRUD operations, backtesting",
+            "files": [
+                "frontend/src/pages/admin/GridTemplateManager.jsx",
+                "frontend/src/components/admin/TemplateTable.jsx",
+                "frontend/src/components/admin/CreateTemplateModal.jsx",
+                "frontend/src/components/admin/BacktestRunner.jsx",
+                "frontend/src/api/adminGridTemplate.js",
+                "backend/src/api/admin_grid_template.py"
+            ]
+        },
+        {
+            "name": "Backtesting System",
+            "description": "Grid trading backtest engine with candle data service and performance metrics",
+            "files": [
+                "backend/src/services/candle_data_service.py",
+                "backend/src/services/grid_backtester.py",
+                "backend/src/schemas/backtest_schema.py"
+            ]
+        },
+        {
+            "name": "Trading",
+            "description": "Real-time trading interface with TradingView charts and position management",
+            "files": [
+                "frontend/src/pages/Trading.jsx",
+                "frontend/src/components/TradingChart.jsx"
+            ]
+        },
+        {
+            "name": "Trading History",
+            "description": "Historical trade records and performance analytics",
+            "files": [
+                "frontend/src/pages/TradingHistory.jsx",
+                "backend/src/api/trading_history.py"
+            ]
+        },
+        {
+            "name": "Strategy Management",
+            "description": "Trading strategy configuration and management",
+            "files": [
+                "frontend/src/pages/Strategy.jsx",
+                "frontend/src/context/StrategyContext.jsx",
+                "backend/src/api/strategies.py"
+            ]
+        },
+        {
+            "name": "Alerts & Notifications",
+            "description": "Price alerts and trading notifications system",
+            "files": [
+                "frontend/src/pages/Alerts.jsx",
+                "frontend/src/pages/Notifications.jsx",
+                "frontend/src/components/TradingNotification.jsx"
+            ]
+        },
+        {
+            "name": "Settings",
+            "description": "User settings, API key management, and preferences",
+            "files": [
+                "frontend/src/pages/Settings.jsx",
+                "backend/src/api/account.py"
+            ]
+        },
+        {
+            "name": "WebSocket Connection",
+            "description": "Real-time data updates via WebSocket for trading data",
+            "files": [
+                "frontend/src/context/WebSocketContext.jsx",
+                "backend/src/api/websocket.py"
+            ]
+        }
+    ]
+}
