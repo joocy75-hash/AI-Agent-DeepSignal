@@ -1,0 +1,337 @@
+import { useEffect, useRef, memo, useState } from 'react';
+import { Select, Space, Typography, Spin } from 'antd';
+import { DownOutlined } from '@ant-design/icons';
+
+const { Text } = Typography;
+
+// 코인 정보 (아이콘, 색상)
+const COIN_DATA = {
+    btc: { name: 'Bitcoin', symbol: '₿', color: '#F7931A', gradient: 'linear-gradient(135deg, #F7931A 0%, #FFAB40 100%)' },
+    eth: { name: 'Ethereum', symbol: 'Ξ', color: '#627EEA', gradient: 'linear-gradient(135deg, #627EEA 0%, #8C9EFF 100%)' },
+    bnb: { name: 'BNB', symbol: 'B', color: '#F3BA2F', gradient: 'linear-gradient(135deg, #F3BA2F 0%, #FFD54F 100%)' },
+    sol: { name: 'Solana', symbol: 'S', color: '#9945FF', gradient: 'linear-gradient(135deg, #9945FF 0%, #14F195 100%)' },
+    ada: { name: 'Cardano', symbol: 'A', color: '#0033AD', gradient: 'linear-gradient(135deg, #0033AD 0%, #3F51B5 100%)' },
+};
+
+// TradingView 심볼 매핑 (Bitget Perpetual)
+const TRADINGVIEW_SYMBOLS = {
+    BTCUSDT: 'BITGET:BTCUSDT.P',
+    ETHUSDT: 'BITGET:ETHUSDT.P',
+    BNBUSDT: 'BITGET:BNBUSDT.P',
+    SOLUSDT: 'BITGET:SOLUSDT.P',
+    ADAUSDT: 'BITGET:ADAUSDT.P',
+};
+
+// Custom hook for responsive detection
+const useIsMobile = () => {
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    return isMobile;
+};
+
+function TradingViewWidget({
+    symbol = 'BTCUSDT',
+    height = 500,
+    availableSymbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT'],
+    onSymbolChange,
+}) {
+    const containerRef = useRef(null);
+    const scriptRef = useRef(null);
+    const [loading, setLoading] = useState(true);
+    const [coinModalOpen, setCoinModalOpen] = useState(false);
+    const isMobile = useIsMobile();
+
+    // 코인 ID 추출
+    const coinId = symbol.replace('USDT', '').toLowerCase();
+    const coinInfo = COIN_DATA[coinId] || {
+        name: coinId.toUpperCase(),
+        symbol: coinId.charAt(0).toUpperCase(),
+        color: '#1890ff',
+        gradient: 'linear-gradient(135deg, #1890ff 0%, #40a9ff 100%)'
+    };
+
+    // TradingView 위젯 로드
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        // 기존 위젯 제거
+        if (scriptRef.current) {
+            scriptRef.current.remove();
+        }
+        containerRef.current.innerHTML = '';
+        setLoading(true);
+
+        const tradingViewSymbol = TRADINGVIEW_SYMBOLS[symbol] || `BITGET:${symbol}.P`;
+
+        // TradingView Advanced Chart Widget
+        const script = document.createElement('script');
+        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+        script.type = 'text/javascript';
+        script.async = true;
+        script.innerHTML = JSON.stringify({
+            autosize: true,
+            symbol: tradingViewSymbol,
+            interval: '15',
+            timezone: 'Asia/Seoul',
+            theme: 'light',
+            style: '1',
+            locale: 'kr',
+            enable_publishing: false,
+            allow_symbol_change: false,
+            hide_top_toolbar: false,
+            hide_side_toolbar: isMobile,
+            withdateranges: true,
+            save_image: false,
+            calendar: false,
+            hide_volume: false,
+            support_host: 'https://www.tradingview.com',
+            container_id: 'tradingview_chart',
+        });
+
+        script.onload = () => {
+            setLoading(false);
+        };
+
+        scriptRef.current = script;
+
+        // 위젯 컨테이너 생성
+        const widgetContainer = document.createElement('div');
+        widgetContainer.className = 'tradingview-widget-container';
+        widgetContainer.style.height = '100%';
+        widgetContainer.style.width = '100%';
+
+        const innerContainer = document.createElement('div');
+        innerContainer.id = 'tradingview_chart';
+        innerContainer.style.height = '100%';
+        innerContainer.style.width = '100%';
+
+        widgetContainer.appendChild(innerContainer);
+        widgetContainer.appendChild(script);
+        containerRef.current.appendChild(widgetContainer);
+
+        // 약간의 딜레이 후 로딩 해제
+        const timer = setTimeout(() => setLoading(false), 2000);
+
+        return () => {
+            clearTimeout(timer);
+            if (scriptRef.current) {
+                scriptRef.current.remove();
+            }
+        };
+    }, [symbol, isMobile]);
+
+    const handleSymbolChange = (newSymbol) => {
+        if (onSymbolChange) {
+            onSymbolChange(newSymbol);
+        }
+        setCoinModalOpen(false);
+    };
+
+    return (
+        <div style={{ position: 'relative', width: '100%' }}>
+            {/* Header: Coin Selector */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: isMobile ? '8px' : '16px',
+                padding: isMobile ? '10px 12px' : '14px 16px',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px 12px 0 0',
+                background: '#ffffff',
+            }}>
+                {/* Coin Selector */}
+                <div
+                    onClick={() => setCoinModalOpen(!coinModalOpen)}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: isMobile ? '8px' : '12px',
+                        cursor: 'pointer',
+                        padding: isMobile ? '4px 8px 4px 4px' : '6px 12px 6px 6px',
+                        borderRadius: '10px',
+                        transition: 'all 0.2s ease',
+                        background: 'transparent',
+                        position: 'relative',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f7'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                    {/* Coin Icon */}
+                    <div style={{
+                        width: isMobile ? '32px' : '40px',
+                        height: isMobile ? '32px' : '40px',
+                        borderRadius: '50%',
+                        background: coinInfo.gradient,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: isMobile ? '16px' : '20px',
+                        fontWeight: '700',
+                        color: '#fff',
+                        boxShadow: `0 4px 12px ${coinInfo.color}40`,
+                    }}>
+                        {coinInfo.symbol}
+                    </div>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '4px' : '8px' }}>
+                            <span style={{
+                                fontSize: isMobile ? '14px' : '18px',
+                                fontWeight: '700',
+                                color: '#111827',
+                                letterSpacing: '-0.02em',
+                            }}>
+                                {symbol.replace('USDT', '')}
+                            </span>
+                            {!isMobile && (
+                                <span style={{
+                                    fontSize: '12px',
+                                    color: '#9ca3af',
+                                    background: '#f3f4f6',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                }}>Perpetual</span>
+                            )}
+                            <DownOutlined style={{ fontSize: isMobile ? '8px' : '10px', color: '#9ca3af' }} />
+                        </div>
+                        {!isMobile && (
+                            <div style={{ fontSize: '11px', color: '#9ca3af' }}>
+                                {coinInfo.name} · Bitget
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Timeframe Badge */}
+                <div style={{
+                    padding: isMobile ? '6px 12px' : '8px 16px',
+                    borderRadius: isMobile ? '6px' : '8px',
+                    background: '#111827',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    fontSize: isMobile ? '11px' : '13px',
+                }}>
+                    {isMobile ? '15m' : '15분'}
+                </div>
+            </div>
+
+            {/* Dropdown Menu */}
+            {coinModalOpen && (
+                <div style={{
+                    position: 'absolute',
+                    top: isMobile ? '52px' : '64px',
+                    left: '12px',
+                    zIndex: 100,
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                    minWidth: '200px',
+                    overflow: 'hidden',
+                }}>
+                    {availableSymbols.map(sym => {
+                        const id = sym.replace('USDT', '').toLowerCase();
+                        const info = COIN_DATA[id] || { name: id.toUpperCase(), symbol: id.charAt(0).toUpperCase(), gradient: '#1890ff' };
+                        const isSelected = sym === symbol;
+
+                        return (
+                            <div
+                                key={sym}
+                                onClick={() => handleSymbolChange(sym)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    padding: '12px 16px',
+                                    cursor: 'pointer',
+                                    background: isSelected ? '#f0f5ff' : 'transparent',
+                                    borderLeft: isSelected ? '3px solid #1890ff' : '3px solid transparent',
+                                    transition: 'all 0.15s',
+                                }}
+                                onMouseEnter={(e) => !isSelected && (e.currentTarget.style.background = '#f9fafb')}
+                                onMouseLeave={(e) => !isSelected && (e.currentTarget.style.background = 'transparent')}
+                            >
+                                <div style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '50%',
+                                    background: info.gradient,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '12px',
+                                    fontWeight: '700',
+                                    color: '#fff',
+                                }}>
+                                    {info.symbol}
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: '600', color: '#111827', fontSize: '14px' }}>
+                                        {sym.replace('USDT', '')}
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: '#9ca3af' }}>
+                                        {info.name}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Backdrop for dropdown */}
+            {coinModalOpen && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 99,
+                    }}
+                    onClick={() => setCoinModalOpen(false)}
+                />
+            )}
+
+            {/* TradingView Chart Container */}
+            <div
+                ref={containerRef}
+                style={{
+                    width: '100%',
+                    height: `${height}px`,
+                    minHeight: isMobile ? '300px' : '400px',
+                    border: '1px solid #e5e7eb',
+                    borderTop: 'none',
+                    borderRadius: '0 0 12px 12px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                }}
+            >
+                {loading && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '12px',
+                    }}>
+                        <Spin size="large" />
+                        <Text type="secondary">차트 로딩 중...</Text>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export default memo(TradingViewWidget);

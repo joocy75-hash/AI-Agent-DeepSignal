@@ -1,21 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Row, Col, Card, Typography, Select, Button, message, Badge, Space, Tag, Divider } from 'antd';
 import {
     LineChartOutlined,
     ControlOutlined,
-    ReloadOutlined,
     PlayCircleOutlined,
     PauseCircleOutlined,
     InfoCircleOutlined,
     BookOutlined,
 } from '@ant-design/icons';
-import { chartAPI } from '../api/chart';
 import { botAPI } from '../api/bot';
-import { annotationsAPI } from '../api/annotations';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
 import { useStrategies } from '../context/StrategyContext';
-import TradingChart from '../components/TradingChart';
+import TradingViewWidget from '../components/TradingViewWidget';
 import BalanceCard from '../components/BalanceCard';
 import PositionList from '../components/PositionList';
 import BotLogViewer from '../components/BotLogViewer';
@@ -37,16 +34,9 @@ export default function Trading() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Chart State
+    // Chart State - TradingView 위젯 사용으로 단순화
     const [symbol, setSymbol] = useState('BTCUSDT');
-    // 타임프레임 15m 고정 (코인별 단일 타임프레임 사용)
-    const timeframe = '15m';
-    const [candles, setCandles] = useState([]);
-    const [positions, setPositions] = useState([]);
-    const [tradeMarkers, setTradeMarkers] = useState([]);
-    const [annotations, setAnnotations] = useState([]);
-    const [chartLoading, setChartLoading] = useState(false);
-    const [wsUpdateCallback, setWsUpdateCallback] = useState(null);
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT'];
 
     // Bot State
     const [botStatus, setBotStatus] = useState(null);
@@ -54,89 +44,6 @@ export default function Trading() {
     const [botLoading, setBotLoading] = useState(false);
     const [showStartConfirm, setShowStartConfirm] = useState(false);
     const [showStopConfirm, setShowStopConfirm] = useState(false);
-
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT'];
-
-    // Load Chart Data
-    const loadChartData = useCallback(async () => {
-        console.log(`[Trading] Loading chart data - Symbol: ${symbol}, Timeframe: ${timeframe}`);
-        setChartLoading(true);
-        try {
-            const [candleData, positionData, markersData, annotationsData] = await Promise.all([
-                chartAPI.getCandles(symbol, 200, true, timeframe),
-                chartAPI.getCurrentPositions(symbol),
-                chartAPI.getPositionMarkers(symbol, 30), // 최근 30일 마커
-                annotationsAPI.getAnnotations(symbol).catch(() => ({ annotations: [] })) // 실패해도 빈 배열
-            ]);
-            console.log(`[Trading] Received ${candleData.candles?.length || 0} candles for ${symbol} ${timeframe}`);
-            console.log(`[Trading] Received ${markersData.markers?.length || 0} trade markers`);
-            console.log(`[Trading] Received ${annotationsData.annotations?.length || 0} annotations`);
-            setCandles(candleData.candles || []);
-            setPositions(positionData.positions || []);
-            setTradeMarkers(markersData.markers || []);
-            setAnnotations(annotationsData.annotations || []);
-        } catch (err) {
-            console.error('[Trading] Chart load error:', err);
-            message.error('차트 데이터 로드 실패');
-        } finally {
-            setChartLoading(false);
-        }
-    }, [symbol]);  // timeframe은 15m 고정이므로 의존성에서 제외
-
-    // 어노테이션 추가 핸들러
-    const handleAnnotationAdd = useCallback(async (annotationData) => {
-        try {
-            const newAnnotation = await annotationsAPI.createAnnotation({
-                symbol: symbol,
-                annotation_type: annotationData.type,
-                label: annotationData.label,
-                price: annotationData.price,
-                alert_enabled: annotationData.alert_enabled || false,
-                style: { color: annotationData.type === 'price_level' ? '#ff4d4f' : '#52c41a' }
-            });
-            setAnnotations(prev => [...prev, newAnnotation]);
-            message.success('주석이 추가되었습니다');
-        } catch (err) {
-            console.error('[Trading] Annotation add error:', err);
-            message.error('주석 추가 실패');
-        }
-    }, [symbol]);
-
-    // 어노테이션 삭제 핸들러
-    const handleAnnotationDelete = useCallback(async (annotationId) => {
-        try {
-            await annotationsAPI.deleteAnnotation(annotationId);
-            setAnnotations(prev => prev.filter(a => a.id !== annotationId));
-            message.success('주석이 삭제되었습니다');
-        } catch (err) {
-            console.error('[Trading] Annotation delete error:', err);
-            message.error('주석 삭제 실패');
-        }
-    }, []);
-
-    // 어노테이션 편집 핸들러
-    const handleAnnotationEdit = useCallback(async (annotationId, updateData) => {
-        try {
-            const updated = await annotationsAPI.updateAnnotation(annotationId, updateData);
-            setAnnotations(prev => prev.map(a => a.id === annotationId ? updated : a));
-            message.success('주석이 수정되었습니다');
-        } catch (err) {
-            console.error('[Trading] Annotation edit error:', err);
-            message.error('주석 수정 실패');
-        }
-    }, []);
-
-    // 가격 알림 리셋 핸들러
-    const handleAnnotationResetAlert = useCallback(async (annotationId) => {
-        try {
-            const updated = await annotationsAPI.resetAlert(annotationId);
-            setAnnotations(prev => prev.map(a => a.id === annotationId ? updated : a));
-            message.success('가격 알림이 리셋되었습니다');
-        } catch (err) {
-            console.error('[Trading] Annotation reset alert error:', err);
-            message.error('알림 리셋 실패');
-        }
-    }, []);
 
     // Load Bot Data (전략 목록은 StrategyContext에서 전역 관리)
     const loadBotData = async () => {
@@ -158,9 +65,8 @@ export default function Trading() {
     // 전역 전략 상태에서 활성화된 전략만 가져오기
     const strategies = getActiveStrategies();
 
-    // Initial Load
+    // Initial Load - Bot 데이터만 로드 (차트는 TradingView 위젯이 자동 처리)
     useEffect(() => {
-        loadChartData();
         loadBotData();
     }, []);
 
@@ -335,85 +241,22 @@ export default function Trading() {
             <Row gutter={isMobile ? [8, 8] : [20, 20]}>
                 {/* Left Column - Chart */}
                 <Col xs={24} lg={17}>
-                    {/* Combined Chart Card */}
+                    {/* TradingView Chart Card */}
                     <Card
                         style={{ marginBottom: isMobile ? 12 : 20 }}
                         styles={{ body: { padding: 0 } }}
-                        extra={
-                            <Button
-                                icon={<ReloadOutlined />}
-                                onClick={loadChartData}
-                                loading={chartLoading}
-                                size="small"
-                                type="text"
-                            >
-                                {!isMobile && '새로고침'}
-                            </Button>
-                        }
                     >
-                        {/* Chart - 고정 높이로 줄어듦 방지 */}
-                        <div style={{
-                            minHeight: isMobile ? 300 : 500,
-                            position: 'relative',
-                            display: 'flex',
-                            alignItems: candles.length === 0 ? 'center' : 'stretch',
-                            justifyContent: candles.length === 0 ? 'center' : 'flex-start'
-                        }}>
-                            {candles.length === 0 ? (
-                                <div style={{ textAlign: 'center', color: chartLoading ? '#666' : '#c62828' }}>
-                                    {chartLoading ? '차트 데이터를 불러오는 중...' : '차트 데이터가 없습니다. 새로고침을 눌러주세요.'}
-                                </div>
-                            ) : (
-                                <>
-                                    {/* 로딩 오버레이 - 기존 차트 위에 표시 */}
-                                    {chartLoading && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: 8,
-                                            right: 8,
-                                            zIndex: 10,
-                                            background: 'rgba(255,255,255,0.9)',
-                                            padding: '4px 12px',
-                                            borderRadius: 6,
-                                            fontSize: 12,
-                                            color: '#666',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 6
-                                        }}>
-                                            <span style={{
-                                                width: 8,
-                                                height: 8,
-                                                borderRadius: '50%',
-                                                background: '#52c41a',
-                                                animation: 'pulse 1s infinite'
-                                            }} />
-                                            업데이트 중...
-                                        </div>
-                                    )}
-                                    <TradingChart
-                                        data={candles}
-                                        symbol={symbol.replace('USDT', '/USDT')}
-                                        positions={positions}
-                                        tradeMarkers={tradeMarkers}
-                                        annotations={annotations}
-                                        height={isMobile ? 300 : 500}
-                                        timeframe={timeframe}
-                                        onCandleUpdate={handleCandleUpdateCallback}
-                                        availableSymbols={symbols}
-                                        onSymbolChange={setSymbol}
-                                        onAnnotationAdd={handleAnnotationAdd}
-                                        onAnnotationDelete={handleAnnotationDelete}
-                                        onAnnotationEdit={handleAnnotationEdit}
-                                        onAnnotationResetAlert={handleAnnotationResetAlert}
-                                    />
-                                </>
-                            )}
-                        </div>
+                        {/* TradingView Widget - 외부 실시간 차트 */}
+                        <TradingViewWidget
+                            symbol={symbol}
+                            height={isMobile ? 350 : 500}
+                            availableSymbols={symbols}
+                            onSymbolChange={setSymbol}
+                        />
                     </Card>
 
                     {/* Position List */}
-                    <PositionList currentPrices={{ [symbol]: latestCandle?.close || 0 }} />
+                    <PositionList currentPrices={{}} />
                 </Col>
 
                 {/* Right Column - Bot Control */}
@@ -629,10 +472,10 @@ export default function Trading() {
                                     <Text type="secondary">위험도</Text>
                                     <Tag color={
                                         selectedStrategyObj.risk_level?.includes('high') ? 'red' :
-                                        selectedStrategyObj.risk_level?.includes('medium') ? 'orange' : 'green'
+                                            selectedStrategyObj.risk_level?.includes('medium') ? 'orange' : 'green'
                                     }>
                                         {selectedStrategyObj.risk_level?.includes('high') ? '고위험' :
-                                         selectedStrategyObj.risk_level?.includes('medium') ? '중위험' : '저위험'}
+                                            selectedStrategyObj.risk_level?.includes('medium') ? '중위험' : '저위험'}
                                     </Tag>
                                 </div>
                             </div>
