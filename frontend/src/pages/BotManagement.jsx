@@ -53,6 +53,7 @@ import EditBotModal from '../components/bot/EditBotModal';
 // 그리드 봇 컴포넌트
 import GridBotCard from '../components/grid/GridBotCard';
 import CreateGridBotModal from '../components/grid/CreateGridBotModal';
+import { GridBotTabs } from '../components/grid';  // 탭 컴포넌트 추가
 
 const { Title, Text } = Typography;
 
@@ -569,29 +570,47 @@ export default function BotManagement() {
 
             {/* 봇 카드 그리드 */}
             <Spin spinning={loading}>
-                <Row gutter={[16, 16]}>
-                    {filteredBots.map((bot) => (
-                        <Col xs={24} sm={12} lg={8} xl={6} key={bot.id}>
-                            {renderBotCard(bot)}
-                        </Col>
-                    ))}
-
-                    {/* 새 AI 봇 추가 카드 (AI 탭 또는 전체 탭에서만) */}
-                    {(activeTab === 'all' || activeTab === 'ai_trend') &&
-                        availableAllocation > 0 && (
-                            <Col xs={24} sm={12} lg={8} xl={6}>
-                                <AddBotCard
-                                    maxAllocation={availableAllocation}
-                                    strategies={strategies}
-                                    onCreate={handleCreateBot}
-                                />
+                {/* 그리드 탭: AI 추천 + 내 봇 탭 */}
+                {activeTab === 'grid' ? (
+                    <GridBotTabs
+                        gridBots={bots.filter(b => b.bot_type === 'grid')}
+                        onStartBot={handleStartBot}
+                        onStopBot={handleStopBot}
+                        onEditBot={(bot) => setGridBotModal({ open: true, bot })}
+                        onDeleteBot={handleDeleteBot}
+                        onCreateBot={() => setGridBotModal({ open: true, bot: null })}
+                        onViewDetail={(botId) =>
+                            setStatsModal({
+                                open: true,
+                                botId,
+                                botName: bots.find((b) => b.id === botId)?.name,
+                            })
+                        }
+                        availableAllocation={availableAllocation}
+                        onRefresh={loadBots}
+                    />
+                ) : (
+                    <Row gutter={[16, 16]}>
+                        {filteredBots.map((bot) => (
+                            <Col xs={24} sm={12} lg={8} xl={6} key={bot.id}>
+                                {renderBotCard(bot)}
                             </Col>
-                        )}
+                        ))}
 
-                    {/* 그리드 봇 빈 상태 */}
-                    {activeTab === 'grid' &&
-                        botCounts.gridCount === 0 &&
-                        !loading && (
+                        {/* 새 AI 봇 추가 카드 (AI 탭 또는 전체 탭에서만) */}
+                        {(activeTab === 'all' || activeTab === 'ai_trend') &&
+                            availableAllocation > 0 && (
+                                <Col xs={24} sm={12} lg={8} xl={6}>
+                                    <AddBotCard
+                                        maxAllocation={availableAllocation}
+                                        strategies={strategies}
+                                        onCreate={handleCreateBot}
+                                    />
+                                </Col>
+                            )}
+
+                        {/* 전체 빈 상태 */}
+                        {bots.length === 0 && !loading && activeTab === 'all' && (
                             <Col xs={24}>
                                 <div
                                     style={{
@@ -602,7 +621,7 @@ export default function BotManagement() {
                                         border: '1px solid #f5f5f7',
                                     }}
                                 >
-                                    <LineChartOutlined
+                                    <RobotOutlined
                                         style={{
                                             fontSize: 48,
                                             color: '#d2d2d7',
@@ -618,84 +637,22 @@ export default function BotManagement() {
                                             marginBottom: 8,
                                         }}
                                     >
-                                        그리드 봇이 없습니다
+                                        등록된 봇이 없습니다
                                     </Text>
                                     <Text
                                         style={{
                                             color: '#aeaeb2',
                                             fontSize: 13,
-                                            display: 'block',
-                                            marginBottom: 24,
                                         }}
                                     >
-                                        가격 범위 내에서 자동으로 매수/매도를 반복하는 그리드
-                                        봇을 만들어보세요
+                                        AI 추세 봇 또는 그리드 봇을 추가하여 자동 거래를
+                                        시작하세요
                                     </Text>
-                                    <Button
-                                        type="primary"
-                                        icon={<PlusOutlined />}
-                                        onClick={() =>
-                                            setGridBotModal({ open: true, bot: null })
-                                        }
-                                        disabled={availableAllocation <= 0}
-                                        style={{
-                                            background: '#34c759',
-                                            border: 'none',
-                                            borderRadius: 10,
-                                            fontWeight: 600,
-                                            height: 44,
-                                            padding: '0 24px',
-                                        }}
-                                    >
-                                        첫 그리드 봇 만들기
-                                    </Button>
                                 </div>
                             </Col>
                         )}
-
-                    {/* 전체 빈 상태 */}
-                    {bots.length === 0 && !loading && activeTab === 'all' && (
-                        <Col xs={24}>
-                            <div
-                                style={{
-                                    textAlign: 'center',
-                                    padding: '60px 20px',
-                                    background: '#ffffff',
-                                    borderRadius: 16,
-                                    border: '1px solid #f5f5f7',
-                                }}
-                            >
-                                <RobotOutlined
-                                    style={{
-                                        fontSize: 48,
-                                        color: '#d2d2d7',
-                                        marginBottom: 16,
-                                        display: 'block',
-                                    }}
-                                />
-                                <Text
-                                    style={{
-                                        color: '#86868b',
-                                        fontSize: 16,
-                                        display: 'block',
-                                        marginBottom: 8,
-                                    }}
-                                >
-                                    등록된 봇이 없습니다
-                                </Text>
-                                <Text
-                                    style={{
-                                        color: '#aeaeb2',
-                                        fontSize: 13,
-                                    }}
-                                >
-                                    AI 추세 봇 또는 그리드 봇을 추가하여 자동 거래를
-                                    시작하세요
-                                </Text>
-                            </div>
-                        </Col>
-                    )}
-                </Row>
+                    </Row>
+                )}
             </Spin>
 
             {/* AI 봇 통계 모달 */}
