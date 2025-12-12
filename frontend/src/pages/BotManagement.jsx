@@ -212,7 +212,7 @@ export default function BotManagement() {
                 <Space>
                     <DashboardOutlined />
                     전체
-                    <Badge count={bots.length} style={{ backgroundColor: '#00A8FF' }} />
+                    <Badge count={bots.length} style={{ backgroundColor: '#0071e3' }} />
                 </Space>
             ),
         },
@@ -220,11 +220,11 @@ export default function BotManagement() {
             key: 'ai_trend',
             label: (
                 <Space>
-                    <ThunderboltOutlined style={{ color: '#7C54FF' }} />
+                    <ThunderboltOutlined style={{ color: '#5856d6' }} />
                     AI 추세
                     <Badge
                         count={botCounts.aiCount}
-                        style={{ backgroundColor: '#7C54FF' }}
+                        style={{ backgroundColor: '#5856d6' }}
                     />
                 </Space>
             ),
@@ -233,11 +233,11 @@ export default function BotManagement() {
             key: 'grid',
             label: (
                 <Space>
-                    <LineChartOutlined style={{ color: '#00C076' }} />
+                    <LineChartOutlined style={{ color: '#34c759' }} />
                     그리드
                     <Badge
                         count={botCounts.gridCount}
-                        style={{ backgroundColor: '#00C076' }}
+                        style={{ backgroundColor: '#34c759' }}
                     />
                 </Space>
             ),
@@ -290,8 +290,6 @@ export default function BotManagement() {
             style={{
                 maxWidth: 1400,
                 margin: '0 auto',
-                background: '#0d0d14',
-                minHeight: 'calc(100vh - 64px)',
                 padding: isMobile ? '16px' : '24px 32px',
             }}
         >
@@ -311,16 +309,16 @@ export default function BotManagement() {
                         level={isMobile ? 3 : 2}
                         style={{
                             marginBottom: 4,
-                            color: '#fff',
+                            color: '#1d1d1f',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 10,
                         }}
                     >
-                        <RobotOutlined style={{ color: '#00A8FF' }} />
+                        <RobotOutlined style={{ color: '#0071e3' }} />
                         봇 관리
                     </Title>
-                    <Text style={{ color: 'rgba(255,255,255,0.5)' }}>
+                    <Text style={{ color: '#86868b' }}>
                         AI 추세 봇과 그리드 봇을 생성하고 관리하세요
                     </Text>
                 </div>
@@ -335,9 +333,6 @@ export default function BotManagement() {
                         }}
                         loading={loading}
                         style={{
-                            background: '#252538',
-                            border: 'none',
-                            color: '#fff',
                             borderRadius: 8,
                         }}
                     >
@@ -364,8 +359,7 @@ export default function BotManagement() {
                             loading={actionLoading}
                             disabled={bots.length === 0}
                             style={{
-                                background:
-                                    'linear-gradient(135deg, #00C076 0%, #00A060 100%)',
+                                background: '#34c759',
                                 border: 'none',
                                 borderRadius: 8,
                                 fontWeight: 600,
@@ -382,9 +376,8 @@ export default function BotManagement() {
                 <Col xs={12} sm={6}>
                     <Card
                         style={{
-                            background:
-                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
-                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: '#ffffff',
+                            border: '1px solid #f5f5f7',
                             borderRadius: 12,
                         }}
                         styles={{ body: { padding: '16px 20px' } }}
@@ -393,7 +386,7 @@ export default function BotManagement() {
                             title={
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.5)',
+                                        color: '#86868b',
                                         fontSize: 12,
                                     }}
                                 >
@@ -404,17 +397,17 @@ export default function BotManagement() {
                             suffix={
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.3)',
+                                        color: '#86868b',
                                         fontSize: 12,
                                     }}
                                 >
                                     개
                                 </Text>
                             }
-                            valueStyle={{ color: '#fff', fontSize: 24, fontWeight: 700 }}
+                            valueStyle={{ color: '#1d1d1f', fontSize: 24, fontWeight: 700 }}
                             prefix={
                                 <DashboardOutlined
-                                    style={{ color: '#00A8FF', marginRight: 8 }}
+                                    style={{ color: '#0071e3', marginRight: 8 }}
                                 />
                             }
                         />
@@ -423,9 +416,8 @@ export default function BotManagement() {
                 <Col xs={12} sm={6}>
                     <Card
                         style={{
-                            background:
-                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
-                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: '#ffffff',
+                            border: '1px solid #f5f5f7',
                             borderRadius: 12,
                         }}
                         styles={{ body: { padding: '16px 20px' } }}
@@ -434,7 +426,7 @@ export default function BotManagement() {
                             title={
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.5)',
+                                        color: '#86868b',
                                         fontSize: 12,
                                     }}
                                 >
@@ -445,17 +437,17 @@ export default function BotManagement() {
                             suffix={
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.3)',
+                                        color: '#86868b',
                                         fontSize: 12,
                                     }}
                                 >
                                     개
                                 </Text>
                             }
-                            valueStyle={{ color: '#00C076', fontSize: 24, fontWeight: 700 }}
+                            valueStyle={{ color: '#34c759', fontSize: 24, fontWeight: 700 }}
                             prefix={
                                 <ThunderboltOutlined
-                                    style={{ color: '#00C076', marginRight: 8 }}
+                                    style={{ color: '#34c759', marginRight: 8 }}
                                 />
                             }
                         />
@@ -464,9 +456,8 @@ export default function BotManagement() {
                 <Col xs={12} sm={6}>
                     <Card
                         style={{
-                            background:
-                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
-                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: '#ffffff',
+                            border: '1px solid #f5f5f7',
                             borderRadius: 12,
                         }}
                         styles={{ body: { padding: '16px 20px' } }}
@@ -475,7 +466,7 @@ export default function BotManagement() {
                             title={
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.5)',
+                                        color: '#86868b',
                                         fontSize: 12,
                                     }}
                                 >
@@ -485,18 +476,18 @@ export default function BotManagement() {
                             value={formatPnl(summary?.total_pnl || 0)}
                             valueStyle={{
                                 color:
-                                    (summary?.total_pnl || 0) >= 0 ? '#00C076' : '#FF4D6A',
+                                    (summary?.total_pnl || 0) >= 0 ? '#34c759' : '#ff3b30',
                                 fontSize: 24,
                                 fontWeight: 700,
                             }}
                             prefix={
                                 (summary?.total_pnl || 0) >= 0 ? (
                                     <RiseOutlined
-                                        style={{ color: '#00C076', marginRight: 8 }}
+                                        style={{ color: '#34c759', marginRight: 8 }}
                                     />
                                 ) : (
                                     <FallOutlined
-                                        style={{ color: '#FF4D6A', marginRight: 8 }}
+                                        style={{ color: '#ff3b30', marginRight: 8 }}
                                     />
                                 )
                             }
@@ -506,9 +497,8 @@ export default function BotManagement() {
                 <Col xs={12} sm={6}>
                     <Card
                         style={{
-                            background:
-                                'linear-gradient(135deg, #1e1e2d 0%, #171725 100%)',
-                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: '#ffffff',
+                            border: '1px solid #f5f5f7',
                             borderRadius: 12,
                         }}
                         styles={{ body: { padding: '16px 20px' } }}
@@ -517,7 +507,7 @@ export default function BotManagement() {
                             title={
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.5)',
+                                        color: '#86868b',
                                         fontSize: 12,
                                     }}
                                 >
@@ -529,14 +519,14 @@ export default function BotManagement() {
                             valueStyle={{
                                 color:
                                     (summary?.overall_win_rate || 0) >= 50
-                                        ? '#00C076'
-                                        : '#FF4D6A',
+                                        ? '#34c759'
+                                        : '#ff3b30',
                                 fontSize: 24,
                                 fontWeight: 700,
                             }}
                             prefix={
                                 <TrophyOutlined
-                                    style={{ color: '#F5C242', marginRight: 8 }}
+                                    style={{ color: '#ff9500', marginRight: 8 }}
                                 />
                             }
                         />
@@ -554,7 +544,7 @@ export default function BotManagement() {
                 items={tabItems}
                 style={{ marginBottom: 16 }}
                 tabBarStyle={{
-                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    borderBottom: '1px solid #f5f5f7',
                     marginBottom: 24,
                 }}
                 tabBarExtraContent={
@@ -565,8 +555,7 @@ export default function BotManagement() {
                             onClick={() => setGridBotModal({ open: true, bot: null })}
                             disabled={availableAllocation <= 0}
                             style={{
-                                background:
-                                    'linear-gradient(135deg, #00C076 0%, #00A8FF 100%)',
+                                background: '#34c759',
                                 border: 'none',
                                 borderRadius: 8,
                                 fontWeight: 600,
@@ -608,23 +597,22 @@ export default function BotManagement() {
                                     style={{
                                         textAlign: 'center',
                                         padding: '60px 20px',
-                                        background:
-                                            'linear-gradient(180deg, #0f1923 0%, #0a1015 100%)',
+                                        background: '#ffffff',
                                         borderRadius: 16,
-                                        border: '1px solid rgba(0, 229, 255, 0.15)',
+                                        border: '1px solid #f5f5f7',
                                     }}
                                 >
                                     <LineChartOutlined
                                         style={{
                                             fontSize: 48,
-                                            color: 'rgba(0, 229, 255, 0.3)',
+                                            color: '#d2d2d7',
                                             marginBottom: 16,
                                             display: 'block',
                                         }}
                                     />
                                     <Text
                                         style={{
-                                            color: 'rgba(255,255,255,0.6)',
+                                            color: '#86868b',
                                             fontSize: 16,
                                             display: 'block',
                                             marginBottom: 8,
@@ -634,7 +622,7 @@ export default function BotManagement() {
                                     </Text>
                                     <Text
                                         style={{
-                                            color: 'rgba(255,255,255,0.3)',
+                                            color: '#aeaeb2',
                                             fontSize: 13,
                                             display: 'block',
                                             marginBottom: 24,
@@ -651,8 +639,7 @@ export default function BotManagement() {
                                         }
                                         disabled={availableAllocation <= 0}
                                         style={{
-                                            background:
-                                                'linear-gradient(135deg, #00C076 0%, #00A8FF 100%)',
+                                            background: '#34c759',
                                             border: 'none',
                                             borderRadius: 10,
                                             fontWeight: 600,
@@ -673,23 +660,22 @@ export default function BotManagement() {
                                 style={{
                                     textAlign: 'center',
                                     padding: '60px 20px',
-                                    background:
-                                        'linear-gradient(180deg, #1e1e2d 0%, #171725 100%)',
+                                    background: '#ffffff',
                                     borderRadius: 16,
-                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    border: '1px solid #f5f5f7',
                                 }}
                             >
                                 <RobotOutlined
                                     style={{
                                         fontSize: 48,
-                                        color: 'rgba(255,255,255,0.2)',
+                                        color: '#d2d2d7',
                                         marginBottom: 16,
                                         display: 'block',
                                     }}
                                 />
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.4)',
+                                        color: '#86868b',
                                         fontSize: 16,
                                         display: 'block',
                                         marginBottom: 8,
@@ -699,7 +685,7 @@ export default function BotManagement() {
                                 </Text>
                                 <Text
                                     style={{
-                                        color: 'rgba(255,255,255,0.25)',
+                                        color: '#aeaeb2',
                                         fontSize: 13,
                                     }}
                                 >

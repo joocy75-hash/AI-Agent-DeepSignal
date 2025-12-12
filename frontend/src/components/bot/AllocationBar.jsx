@@ -1,7 +1,7 @@
 /**
  * AllocationBar Component
  * 
- * 비트겟 스타일의 잔고 할당 시각화 바
+ * 잔고 할당 시각화 바 - 라이트 모드
  * 각 봇의 할당 비율을 시각적으로 표시
  */
 
@@ -13,18 +13,18 @@ import {
 
 const { Text } = Typography;
 
-// 비트겟 스타일 색상 팔레트
+// 색상 팔레트
 const BOT_COLORS = [
-    '#00C076', // 그린 (성공)
-    '#0ECEB9', // 시안
-    '#00A8FF', // 스카이블루
-    '#7C54FF', // 퍼플
-    '#FF6838', // 오렌지
-    '#F5C242', // 골드
-    '#FF4D6A', // 핑크
-    '#36CFC9', // 틸
-    '#597EF7', // 라벤더
-    '#73D13D', // 라임
+    '#34c759', // 그린
+    '#5ac8fa', // 시안
+    '#007aff', // 블루
+    '#5856d6', // 퍼플
+    '#ff9500', // 오렌지
+    '#ffcc00', // 골드
+    '#ff3b30', // 레드
+    '#30d158', // 민트
+    '#af52de', // 라벤더
+    '#32d74b', // 라임
 ];
 
 export default function AllocationBar({
@@ -36,11 +36,11 @@ export default function AllocationBar({
 
     return (
         <div style={{
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+            background: '#ffffff',
             borderRadius: 16,
             padding: '20px 24px',
             marginBottom: 24,
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid #f5f5f7',
             ...style
         }}>
             {/* Header */}
@@ -51,17 +51,17 @@ export default function AllocationBar({
                 marginBottom: 16
             }}>
                 <Space>
-                    <PieChartOutlined style={{ fontSize: 18, color: '#00C076' }} />
-                    <Text strong style={{ fontSize: 15, color: '#fff' }}>
+                    <PieChartOutlined style={{ fontSize: 18, color: '#34c759' }} />
+                    <Text strong style={{ fontSize: 15, color: '#1d1d1f' }}>
                         잔고 할당 현황
                     </Text>
                 </Space>
                 <Space size="large">
-                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-                        사용중 <span style={{ color: '#00C076', fontWeight: 600 }}>{totalAllocation.toFixed(1)}%</span>
+                    <Text style={{ color: '#86868b', fontSize: 13 }}>
+                        사용중 <span style={{ color: '#34c759', fontWeight: 600 }}>{totalAllocation.toFixed(1)}%</span>
                     </Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-                        사용가능 <span style={{ color: '#00A8FF', fontWeight: 600 }}>{availableAllocation.toFixed(1)}%</span>
+                    <Text style={{ color: '#86868b', fontSize: 13 }}>
+                        사용가능 <span style={{ color: '#007aff', fontWeight: 600 }}>{availableAllocation.toFixed(1)}%</span>
                     </Text>
                 </Space>
             </div>
@@ -69,7 +69,7 @@ export default function AllocationBar({
             {/* Progress Bar */}
             <div style={{
                 height: 12,
-                background: 'rgba(255,255,255,0.1)',
+                background: '#f5f5f7',
                 borderRadius: 6,
                 overflow: 'hidden',
                 display: 'flex'
@@ -88,7 +88,7 @@ export default function AllocationBar({
                                         {bot.allocation_percent}% ({bot.symbol})
                                     </div>
                                     {bot.is_running && (
-                                        <div style={{ color: '#00C076', fontSize: 11 }}>● 실행 중</div>
+                                        <div style={{ color: '#34c759', fontSize: 11 }}>● 실행 중</div>
                                     )}
                                 </div>
                             }
@@ -99,8 +99,8 @@ export default function AllocationBar({
                                     height: '100%',
                                     background: bot.is_running
                                         ? `linear-gradient(90deg, ${color} 0%, ${color}dd 100%)`
-                                        : `${color}66`,
-                                    borderRight: '1px solid rgba(0,0,0,0.2)',
+                                        : `${color}88`,
+                                    borderRight: '1px solid rgba(255,255,255,0.5)',
                                     transition: 'all 0.3s ease',
                                     cursor: 'pointer',
                                 }}
@@ -134,7 +134,7 @@ export default function AllocationBar({
                                 alignItems: 'center',
                                 gap: 6,
                                 padding: '4px 10px',
-                                background: 'rgba(255,255,255,0.05)',
+                                background: '#f5f5f7',
                                 borderRadius: 20,
                                 fontSize: 12,
                             }}
@@ -146,13 +146,13 @@ export default function AllocationBar({
                                 background: color,
                                 boxShadow: bot.is_running ? `0 0 6px ${color}` : 'none'
                             }} />
-                            <span style={{ color: 'rgba(255,255,255,0.8)' }}>{bot.name}</span>
-                            <span style={{ color: 'rgba(255,255,255,0.5)' }}>{bot.allocation_percent}%</span>
+                            <span style={{ color: '#1d1d1f' }}>{bot.name}</span>
+                            <span style={{ color: '#86868b' }}>{bot.allocation_percent}%</span>
                         </div>
                     );
                 })}
                 {bots.length === 0 && (
-                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                    <Text style={{ color: '#86868b', fontSize: 13 }}>
                         <WalletOutlined style={{ marginRight: 6 }} />
                         등록된 봇이 없습니다. 새 봇을 추가해보세요!
                     </Text>

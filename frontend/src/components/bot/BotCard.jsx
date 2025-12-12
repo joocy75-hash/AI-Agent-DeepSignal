@@ -1,8 +1,8 @@
 /**
  * BotCard Component
  * 
- * 비트겟 스타일의 봇 카드 컴포넌트
- * - 실행 상태 표시 (그린 글로우 효과)
+ * 봇 카드 컴포넌트 - 라이트 모드
+ * - 실행 상태 표시
  * - 봇 타입 / 심볼 / 전략 정보
  * - PNL 및 승률 통계
  * - 시작/중지/설정/삭제 버튼
@@ -40,15 +40,15 @@ const { Text, Title } = Typography;
 const BOT_TYPE_CONFIG = {
     ai_trend: {
         label: 'AI 추세',
-        color: '#7C54FF',
+        color: '#5856d6',
         icon: <ThunderboltOutlined />,
-        gradient: 'linear-gradient(135deg, #7C54FF 0%, #5B3CC4 100%)',
+        gradient: 'linear-gradient(135deg, #5856d6 0%, #4040b0 100%)',
     },
     grid: {
         label: '그리드',
-        color: '#00C076',
+        color: '#34c759',
         icon: <LineChartOutlined />,
-        gradient: 'linear-gradient(135deg, #00C076 0%, #00A060 100%)',
+        gradient: 'linear-gradient(135deg, #34c759 0%, #2ca048 100%)',
     },
 };
 
@@ -112,14 +112,14 @@ export default function BotCard({
             style={{
                 borderRadius: 16,
                 border: isRunning
-                    ? '1px solid rgba(0, 192, 118, 0.3)'
-                    : '1px solid rgba(255, 255, 255, 0.08)',
-                background: 'linear-gradient(180deg, #1e1e2d 0%, #171725 100%)',
+                    ? '1px solid rgba(52, 199, 89, 0.3)'
+                    : '1px solid #f5f5f7',
+                background: '#ffffff',
                 overflow: 'hidden',
                 transition: 'all 0.3s ease',
                 boxShadow: isRunning
-                    ? '0 0 20px rgba(0, 192, 118, 0.15)'
-                    : '0 4px 12px rgba(0, 0, 0, 0.3)',
+                    ? '0 0 20px rgba(52, 199, 89, 0.1)'
+                    : '0 2px 8px rgba(0, 0, 0, 0.05)',
             }}
             styles={{
                 body: { padding: 0 }
@@ -173,15 +173,15 @@ export default function BotCard({
                         alignItems: 'center',
                         gap: 6,
                         padding: '4px 10px',
-                        background: isRunning ? 'rgba(0, 192, 118, 0.3)' : 'rgba(255,255,255,0.1)',
+                        background: isRunning ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)',
                         borderRadius: 20,
                     }}>
                         <div style={{
                             width: 8,
                             height: 8,
                             borderRadius: '50%',
-                            background: isRunning ? '#00FF94' : '#6b7280',
-                            boxShadow: isRunning ? '0 0 8px #00FF94' : 'none',
+                            background: isRunning ? '#fff' : 'rgba(255,255,255,0.5)',
+                            boxShadow: isRunning ? '0 0 8px #fff' : 'none',
                             animation: isRunning ? 'pulse 2s infinite' : 'none',
                         }} />
                         <Text style={{ color: '#fff', fontSize: 12, fontWeight: 500 }}>
@@ -201,9 +201,9 @@ export default function BotCard({
                     }}>
                         <Space size={8}>
                             <Tag style={{
-                                background: '#2d2d44',
+                                background: '#f5f5f7',
                                 border: 'none',
-                                color: '#00A8FF',
+                                color: '#007aff',
                                 fontWeight: 600,
                                 fontSize: 13,
                             }}>
@@ -212,9 +212,9 @@ export default function BotCard({
                             {bot.strategy_name && (
                                 <Tooltip title={`전략: ${bot.strategy_name}`}>
                                     <Tag style={{
-                                        background: '#2d2d44',
+                                        background: '#f5f5f7',
                                         border: 'none',
-                                        color: '#b794f6',
+                                        color: '#5856d6',
                                         fontSize: 11,
                                         maxWidth: 100,
                                         overflow: 'hidden',
@@ -226,9 +226,9 @@ export default function BotCard({
                             )}
                         </Space>
                         <Tag style={{
-                            background: 'rgba(0, 168, 255, 0.15)',
+                            background: 'rgba(0, 122, 255, 0.1)',
                             border: 'none',
-                            color: '#00A8FF',
+                            color: '#007aff',
                             fontSize: 12,
                         }}>
                             {bot.allocation_percent}% 할당
@@ -244,16 +244,16 @@ export default function BotCard({
                     }}>
                         {/* 총 손익 */}
                         <div style={{
-                            background: '#252538',
+                            background: '#f5f5f7',
                             borderRadius: 10,
                             padding: 12,
                             textAlign: 'center',
                         }}>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, display: 'block' }}>
+                            <Text style={{ color: '#86868b', fontSize: 11, display: 'block' }}>
                                 총 손익
                             </Text>
                             <Text style={{
-                                color: bot.total_pnl >= 0 ? '#00C076' : '#FF4D6A',
+                                color: bot.total_pnl >= 0 ? '#34c759' : '#ff3b30',
                                 fontSize: 16,
                                 fontWeight: 700,
                             }}>
@@ -263,16 +263,16 @@ export default function BotCard({
 
                         {/* 승률 */}
                         <div style={{
-                            background: '#252538',
+                            background: '#f5f5f7',
                             borderRadius: 10,
                             padding: 12,
                             textAlign: 'center',
                         }}>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, display: 'block' }}>
+                            <Text style={{ color: '#86868b', fontSize: 11, display: 'block' }}>
                                 승률
                             </Text>
                             <Text style={{
-                                color: parseFloat(winRate) >= 50 ? '#00C076' : '#FF4D6A',
+                                color: parseFloat(winRate) >= 50 ? '#34c759' : '#ff3b30',
                                 fontSize: 16,
                                 fontWeight: 700,
                             }}>
@@ -282,30 +282,30 @@ export default function BotCard({
 
                         {/* 총 거래 */}
                         <div style={{
-                            background: '#252538',
+                            background: '#f5f5f7',
                             borderRadius: 10,
                             padding: 12,
                             textAlign: 'center',
                         }}>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, display: 'block' }}>
+                            <Text style={{ color: '#86868b', fontSize: 11, display: 'block' }}>
                                 총 거래
                             </Text>
-                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 700 }}>
+                            <Text style={{ color: '#1d1d1f', fontSize: 16, fontWeight: 700 }}>
                                 {bot.total_trades || 0}
                             </Text>
                         </div>
 
                         {/* 레버리지 */}
                         <div style={{
-                            background: '#252538',
+                            background: '#f5f5f7',
                             borderRadius: 10,
                             padding: 12,
                             textAlign: 'center',
                         }}>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, display: 'block' }}>
+                            <Text style={{ color: '#86868b', fontSize: 11, display: 'block' }}>
                                 레버리지
                             </Text>
-                            <Text style={{ color: '#F5C242', fontSize: 16, fontWeight: 700 }}>
+                            <Text style={{ color: '#ff9500', fontSize: 16, fontWeight: 700 }}>
                                 x{bot.max_leverage || 1}
                             </Text>
                         </div>
@@ -327,8 +327,8 @@ export default function BotCard({
                                 height: 40,
                                 borderRadius: 8,
                                 background: isRunning
-                                    ? 'linear-gradient(135deg, #FF4D6A 0%, #d63c57 100%)'
-                                    : 'linear-gradient(135deg, #00C076 0%, #00A060 100%)',
+                                    ? '#ff3b30'
+                                    : '#34c759',
                                 border: 'none',
                                 fontWeight: 600,
                             }}
@@ -346,9 +346,9 @@ export default function BotCard({
                                     height: 40,
                                     width: 40,
                                     borderRadius: 8,
-                                    background: '#2d2d44',
+                                    background: '#f5f5f7',
                                     border: 'none',
-                                    color: isRunning ? 'rgba(255,255,255,0.3)' : '#fff',
+                                    color: isRunning ? '#d2d2d7' : '#1d1d1f',
                                 }}
                             />
                         </Tooltip>
@@ -362,9 +362,9 @@ export default function BotCard({
                                     height: 40,
                                     width: 40,
                                     borderRadius: 8,
-                                    background: '#2d2d44',
+                                    background: '#f5f5f7',
                                     border: 'none',
-                                    color: '#F5C242',
+                                    color: '#ff9500',
                                 }}
                             />
                         </Tooltip>
@@ -386,7 +386,7 @@ export default function BotCard({
                                         height: 40,
                                         width: 40,
                                         borderRadius: 8,
-                                        background: 'rgba(255, 77, 106, 0.15)',
+                                        background: 'rgba(255, 59, 48, 0.1)',
                                         border: 'none',
                                     }}
                                 />
@@ -399,13 +399,13 @@ export default function BotCard({
                 {(bot.last_trade_at || bot.last_started_at) && (
                     <div style={{
                         padding: '10px 16px',
-                        borderTop: '1px solid rgba(255,255,255,0.05)',
+                        borderTop: '1px solid #f5f5f7',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 6,
                     }}>
-                        <ClockCircleOutlined style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }} />
-                        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+                        <ClockCircleOutlined style={{ color: '#86868b', fontSize: 12 }} />
+                        <Text style={{ color: '#86868b', fontSize: 11 }}>
                             {bot.last_trade_at
                                 ? `마지막 거래: ${new Date(bot.last_trade_at).toLocaleDateString()}`
                                 : bot.last_started_at

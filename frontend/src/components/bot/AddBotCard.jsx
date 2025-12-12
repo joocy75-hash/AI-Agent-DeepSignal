@@ -1,7 +1,7 @@
 /**
  * AddBotCard Component
  * 
- * 비트겟 스타일의 새 봇 추가 카드
+ * 새 봇 추가 카드 - 라이트 모드
  * 클릭 시 봇 생성 모달 표시
  */
 
@@ -92,8 +92,8 @@ export default function AddBotCard({
                 onClick={handleOpen}
                 style={{
                     borderRadius: 16,
-                    border: '2px dashed rgba(0, 168, 255, 0.3)',
-                    background: 'linear-gradient(180deg, rgba(0, 168, 255, 0.05) 0%, rgba(124, 84, 255, 0.05) 100%)',
+                    border: '2px dashed rgba(0, 122, 255, 0.3)',
+                    background: 'linear-gradient(180deg, rgba(0, 122, 255, 0.03) 0%, rgba(88, 86, 214, 0.03) 100%)',
                     minHeight: 360,
                     display: 'flex',
                     alignItems: 'center',
@@ -117,23 +117,23 @@ export default function AddBotCard({
                     width: 64,
                     height: 64,
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #00A8FF 0%, #7C54FF 100%)',
+                    background: 'linear-gradient(135deg, #007aff 0%, #5856d6 100%)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginBottom: 16,
-                    boxShadow: '0 4px 20px rgba(0, 168, 255, 0.3)',
+                    boxShadow: '0 4px 20px rgba(0, 122, 255, 0.2)',
                 }}>
                     <PlusOutlined style={{ fontSize: 28, color: '#fff' }} />
                 </div>
-                <Text strong style={{ fontSize: 16, color: '#fff', marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 16, color: '#1d1d1f', marginBottom: 8 }}>
                     새 봇 추가
                 </Text>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, textAlign: 'center' }}>
+                <Text style={{ color: '#86868b', fontSize: 13, textAlign: 'center' }}>
                     AI 추세 또는 그리드 봇 생성
                 </Text>
                 <div style={{ marginTop: 12 }}>
-                    <Text style={{ color: '#00A8FF', fontSize: 12 }}>
+                    <Text style={{ color: '#007aff', fontSize: 12 }}>
                         최대 {maxAllocation.toFixed(1)}% 할당 가능
                     </Text>
                 </div>
@@ -143,7 +143,7 @@ export default function AddBotCard({
             <Modal
                 title={
                     <Space>
-                        <RobotOutlined style={{ color: '#00A8FF' }} />
+                        <RobotOutlined style={{ color: '#007aff' }} />
                         <span style={{ fontWeight: 600 }}>새 봇 생성</span>
                     </Space>
                 }
@@ -151,18 +151,6 @@ export default function AddBotCard({
                 onCancel={handleClose}
                 footer={null}
                 width={520}
-                styles={{
-                    content: {
-                        background: 'linear-gradient(180deg, #1e1e2d 0%, #171725 100%)',
-                        borderRadius: 16,
-                    },
-                    header: {
-                        background: 'transparent',
-                        borderBottom: '1px solid rgba(255,255,255,0.08)',
-                        color: '#fff',
-                    },
-                    body: { padding: '24px' }
-                }}
             >
                 <Form
                     form={form}
@@ -177,7 +165,7 @@ export default function AddBotCard({
                 >
                     {/* 봇 타입 선택 */}
                     <div style={{ marginBottom: 20 }}>
-                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 8, display: 'block' }}>
+                        <Text style={{ color: '#86868b', fontSize: 13, marginBottom: 8, display: 'block' }}>
                             봇 타입 선택
                         </Text>
                         <Space size={12}>
@@ -187,18 +175,18 @@ export default function AddBotCard({
                                     padding: '16px 24px',
                                     borderRadius: 12,
                                     background: botType === 'ai_trend'
-                                        ? 'linear-gradient(135deg, #7C54FF 0%, #5B3CC4 100%)'
-                                        : '#252538',
-                                    border: botType === 'ai_trend' ? '2px solid #7C54FF' : '2px solid transparent',
+                                        ? 'linear-gradient(135deg, #5856d6 0%, #4040b0 100%)'
+                                        : '#f5f5f7',
+                                    border: botType === 'ai_trend' ? '2px solid #5856d6' : '2px solid transparent',
                                     cursor: 'pointer',
                                     textAlign: 'center',
                                     transition: 'all 0.2s ease',
                                     flex: 1,
                                 }}
                             >
-                                <ThunderboltOutlined style={{ fontSize: 24, color: '#fff', display: 'block', marginBottom: 8 }} />
-                                <Text style={{ color: '#fff', fontWeight: 600, display: 'block' }}>AI 추세</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>전략 기반 자동매매</Text>
+                                <ThunderboltOutlined style={{ fontSize: 24, color: botType === 'ai_trend' ? '#fff' : '#5856d6', display: 'block', marginBottom: 8 }} />
+                                <Text style={{ color: botType === 'ai_trend' ? '#fff' : '#1d1d1f', fontWeight: 600, display: 'block' }}>AI 추세</Text>
+                                <Text style={{ color: botType === 'ai_trend' ? 'rgba(255,255,255,0.7)' : '#86868b', fontSize: 11 }}>전략 기반 자동매매</Text>
                             </div>
                             <div
                                 onClick={() => setBotType('grid')}
@@ -206,66 +194,59 @@ export default function AddBotCard({
                                     padding: '16px 24px',
                                     borderRadius: 12,
                                     background: botType === 'grid'
-                                        ? 'linear-gradient(135deg, #00C076 0%, #00A060 100%)'
-                                        : '#252538',
-                                    border: botType === 'grid' ? '2px solid #00C076' : '2px solid transparent',
+                                        ? 'linear-gradient(135deg, #34c759 0%, #2ca048 100%)'
+                                        : '#f5f5f7',
+                                    border: botType === 'grid' ? '2px solid #34c759' : '2px solid transparent',
                                     cursor: 'pointer',
                                     textAlign: 'center',
                                     transition: 'all 0.2s ease',
                                     flex: 1,
                                 }}
                             >
-                                <LineChartOutlined style={{ fontSize: 24, color: '#fff', display: 'block', marginBottom: 8 }} />
-                                <Text style={{ color: '#fff', fontWeight: 600, display: 'block' }}>그리드</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>범위 내 자동매매</Text>
+                                <LineChartOutlined style={{ fontSize: 24, color: botType === 'grid' ? '#fff' : '#34c759', display: 'block', marginBottom: 8 }} />
+                                <Text style={{ color: botType === 'grid' ? '#fff' : '#1d1d1f', fontWeight: 600, display: 'block' }}>그리드</Text>
+                                <Text style={{ color: botType === 'grid' ? 'rgba(255,255,255,0.7)' : '#86868b', fontSize: 11 }}>범위 내 자동매매</Text>
                             </div>
                         </Space>
                     </div>
 
-                    <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '16px 0' }} />
+                    <Divider style={{ margin: '16px 0' }} />
 
                     {/* 기본 정보 */}
                     <Form.Item
                         name="name"
-                        label={<Text style={{ color: 'rgba(255,255,255,0.8)' }}>봇 이름</Text>}
+                        label={<Text style={{ color: '#1d1d1f' }}>봇 이름</Text>}
                         rules={[{ required: true, message: '봇 이름을 입력해주세요' }]}
                     >
                         <Input
                             placeholder="예: BTC 보수적 봇"
                             style={{
-                                background: '#252538',
-                                border: '1px solid rgba(255,255,255,0.1)',
                                 borderRadius: 8,
-                                color: '#fff',
                             }}
                         />
                     </Form.Item>
 
                     <Form.Item
                         name="description"
-                        label={<Text style={{ color: 'rgba(255,255,255,0.8)' }}>설명 (선택)</Text>}
+                        label={<Text style={{ color: '#1d1d1f' }}>설명 (선택)</Text>}
                     >
                         <TextArea
                             rows={2}
                             placeholder="봇에 대한 간단한 설명"
                             style={{
-                                background: '#252538',
-                                border: '1px solid rgba(255,255,255,0.1)',
                                 borderRadius: 8,
-                                color: '#fff',
                             }}
                         />
                     </Form.Item>
 
                     <Form.Item
                         name="symbol"
-                        label={<Text style={{ color: 'rgba(255,255,255,0.8)' }}>거래 심볼</Text>}
+                        label={<Text style={{ color: '#1d1d1f' }}>거래 심볼</Text>}
                         rules={[{ required: true, message: '심볼을 선택해주세요' }]}
                     >
                         <Select
                             placeholder="심볼 선택"
                             style={{ width: '100%' }}
-                            dropdownStyle={{ background: '#252538' }}
                         >
                             {SYMBOLS.map(s => (
                                 <Option key={s.value} value={s.value}>{s.label}</Option>
@@ -277,13 +258,12 @@ export default function AddBotCard({
                     {botType === 'ai_trend' && (
                         <Form.Item
                             name="strategy_id"
-                            label={<Text style={{ color: 'rgba(255,255,255,0.8)' }}>전략 선택</Text>}
+                            label={<Text style={{ color: '#1d1d1f' }}>전략 선택</Text>}
                             rules={[{ required: true, message: '전략을 선택해주세요' }]}
                         >
                             <Select
                                 placeholder="전략 선택"
                                 style={{ width: '100%' }}
-                                dropdownStyle={{ background: '#252538' }}
                             >
                                 {strategies.map(s => (
                                     <Option key={s.id} value={s.id}>{s.name}</Option>
@@ -292,16 +272,16 @@ export default function AddBotCard({
                         </Form.Item>
                     )}
 
-                    <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '16px 0' }} />
+                    <Divider style={{ margin: '16px 0' }} />
 
                     {/* 리스크 설정 */}
                     <Form.Item
                         name="allocation_percent"
                         label={
                             <Space>
-                                <Text style={{ color: 'rgba(255,255,255,0.8)' }}>잔고 할당</Text>
+                                <Text style={{ color: '#1d1d1f' }}>잔고 할당</Text>
                                 <Tooltip title={`최대 ${maxAllocation.toFixed(1)}%까지 할당 가능`}>
-                                    <InfoCircleOutlined style={{ color: 'rgba(255,255,255,0.4)' }} />
+                                    <InfoCircleOutlined style={{ color: '#86868b' }} />
                                 </Tooltip>
                             </Space>
                         }
@@ -325,25 +305,25 @@ export default function AddBotCard({
                     <Space size={16} style={{ width: '100%' }}>
                         <Form.Item
                             name="max_leverage"
-                            label={<Text style={{ color: 'rgba(255,255,255,0.8)' }}>최대 레버리지</Text>}
+                            label={<Text style={{ color: '#1d1d1f' }}>최대 레버리지</Text>}
                             style={{ flex: 1, marginBottom: 0 }}
                         >
                             <InputNumber
                                 min={1}
                                 max={50}
-                                style={{ width: '100%', background: '#252538' }}
+                                style={{ width: '100%' }}
                             />
                         </Form.Item>
 
                         <Form.Item
                             name="max_positions"
-                            label={<Text style={{ color: 'rgba(255,255,255,0.8)' }}>최대 포지션</Text>}
+                            label={<Text style={{ color: '#1d1d1f' }}>최대 포지션</Text>}
                             style={{ flex: 1, marginBottom: 0 }}
                         >
                             <InputNumber
                                 min={1}
                                 max={10}
-                                style={{ width: '100%', background: '#252538' }}
+                                style={{ width: '100%' }}
                             />
                         </Form.Item>
                     </Space>
@@ -352,7 +332,7 @@ export default function AddBotCard({
                         <Space size={16}>
                             <Form.Item
                                 name="stop_loss_percent"
-                                label={<Text style={{ color: '#FF4D6A' }}>손절 %</Text>}
+                                label={<Text style={{ color: '#ff3b30' }}>손절 %</Text>}
                                 style={{ marginBottom: 0 }}
                             >
                                 <InputNumber
@@ -360,13 +340,13 @@ export default function AddBotCard({
                                     max={50}
                                     step={0.5}
                                     placeholder="2.0"
-                                    style={{ width: 100, background: '#252538' }}
+                                    style={{ width: 100 }}
                                 />
                             </Form.Item>
 
                             <Form.Item
                                 name="take_profit_percent"
-                                label={<Text style={{ color: '#00C076' }}>익절 %</Text>}
+                                label={<Text style={{ color: '#34c759' }}>익절 %</Text>}
                                 style={{ marginBottom: 0 }}
                             >
                                 <InputNumber
@@ -374,13 +354,13 @@ export default function AddBotCard({
                                     max={100}
                                     step={0.5}
                                     placeholder="4.0"
-                                    style={{ width: 100, background: '#252538' }}
+                                    style={{ width: 100 }}
                                 />
                             </Form.Item>
                         </Space>
                     </div>
 
-                    <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '20px 0 16px' }} />
+                    <Divider style={{ margin: '20px 0 16px' }} />
 
                     {/* 알림 설정 */}
                     <Form.Item
@@ -390,7 +370,7 @@ export default function AddBotCard({
                     >
                         <Space>
                             <Switch />
-                            <Text style={{ color: 'rgba(255,255,255,0.8)' }}>텔레그램 알림 활성화</Text>
+                            <Text style={{ color: '#1d1d1f' }}>텔레그램 알림 활성화</Text>
                         </Space>
                     </Form.Item>
 
@@ -402,9 +382,6 @@ export default function AddBotCard({
                                 flex: 1,
                                 height: 44,
                                 borderRadius: 8,
-                                background: '#252538',
-                                border: 'none',
-                                color: '#fff',
                             }}
                         >
                             취소
@@ -417,7 +394,7 @@ export default function AddBotCard({
                                 flex: 2,
                                 height: 44,
                                 borderRadius: 8,
-                                background: 'linear-gradient(135deg, #00A8FF 0%, #7C54FF 100%)',
+                                background: 'linear-gradient(135deg, #007aff 0%, #5856d6 100%)',
                                 border: 'none',
                                 fontWeight: 600,
                             }}
