@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
 
 // SECURITY: 프로덕션 환경에서 HTTPS 사용 확인
 if (import.meta.env.PROD && API_BASE_URL.startsWith('http://') && !API_BASE_URL.includes('localhost')) {

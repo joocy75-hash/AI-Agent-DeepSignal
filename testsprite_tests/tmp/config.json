@@ -7,21 +7,11 @@
   "executionArgs": {
     "projectName": "auto-dashboard",
     "projectPath": "/Users/mr.joo/Desktop/auto-dashboard",
-    "testIds": [
-      "TC001",
-      "TC002",
-      "TC003",
-      "TC004",
-      "TC005",
-      "TC006",
-      "TC007",
-      "TC008",
-      "TC009",
-      "TC010"
-    ],
-    "additionalInstruction": "Please generate comprehensive tests. Note that the local database might not be running, so if possible, use mocking for DB sessions or handle connection errors gracefully. Focus on logic verification where possible.",
+    "testIds": [],
+    "additionalInstruction": "Use SQLite for database testing. Mock external APIs like Bitget REST API to avoid real network calls. Focus on testing the position closing logic and bot creation flow.",
     "envs": {
       "API_KEY": "sk-user-P8T5oDuLwdo4-mYtN1tmXX7YlhoRkGOyXsRxnUKbogwN3rwWcksaSZCctV7_acH7vjJQQTS7VUiiGrWX2XeyW1IyGhOXCyrs2Ja8hBtpjwFUCN7LnAWntcN3dbyVrOaCcKM"
     }
-  }
+  },
+  "proxy": "http://fd6914b6-98e9-49e0-abf9-55d42e9688e1:dgTEV57mLn3Nt6cKlEufZ5A5brGBJcLh@tun.testsprite.com:8080"
 }

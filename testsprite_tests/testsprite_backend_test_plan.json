@@ -2,51 +2,51 @@
   {
     "id": "TC001",
     "title": "user authentication including oauth login and jwt token handling",
-    "description": "Verify that the user authentication flow works correctly including login, registration, JWT token issuance and validation, and OAuth login support for Google and Kakao providers."
+    "description": "Test the user authentication flow including email/password login, OAuth login via Google and Kakao, JWT token issuance, validation, and expiration handling to ensure secure and seamless user access."
   },
   {
     "id": "TC002",
-    "title": "dashboard displays correct portfolio and trading statistics",
-    "description": "Ensure the main dashboard correctly displays the user's portfolio overview, balance, and trading statistics reflecting the backend data accurately."
+    "title": "dashboard portfolio and trading statistics display",
+    "description": "Verify that the main dashboard correctly displays the user's portfolio overview, balance, and trading statistics reflecting the backend data accurately."
   },
   {
     "id": "TC003",
     "title": "bot management create start stop and monitor bots",
-    "description": "Test the creation, starting, stopping, and monitoring of AI Trend and Grid trading bots, ensuring data persistence and correct bot state transitions."
+    "description": "Test the creation, starting, stopping, and monitoring of AI Trend and Grid trading bots ensuring data persistence and correct bot state transitions."
   },
   {
     "id": "TC004",
     "title": "grid bot templates application and backtesting",
-    "description": "Validate that AI-recommended grid bot templates can be applied by users and backtested with accurate performance results and feedback."
+    "description": "Validate that users can apply AI-recommended grid bot templates and run backtests with accurate performance results and correct parameter handling."
   },
   {
     "id": "TC005",
     "title": "admin grid template manager crud and backtesting",
-    "description": "Verify that admin users can perform create, read, update, delete operations on grid bot templates and run backtests without errors."
+    "description": "Test admin functionalities for creating, updating, deleting grid bot templates and running backtests without errors and with correct data updates."
   },
   {
     "id": "TC006",
     "title": "backtesting engine with candle data and performance metrics",
-    "description": "Test the backtesting engine for grid trading strategies using historical candle data and ensure performance metrics are calculated and reported correctly."
+    "description": "Verify the backtesting engine processes historical candle data correctly and produces accurate performance metrics for grid trading strategies."
   },
   {
     "id": "TC007",
     "title": "real time trading interface with chart and position management",
-    "description": "Ensure the real-time trading interface displays live market data via TradingView charts and allows users to open, close, and manage positions correctly."
+    "description": "Test the real-time trading interface including live TradingView chart integration, opening, closing, and managing positions with live market data."
   },
   {
     "id": "TC008",
     "title": "trading history accuracy and analytics",
-    "description": "Validate that the trading history page shows accurate past trade records and performance analytics matching the recorded trade information."
+    "description": "Verify that the trading history page displays accurate past trade records and performance analytics matching the recorded trade information."
   },
   {
     "id": "TC009",
-    "title": "strategy and alert configuration and triggering",
-    "description": "Test that trading strategy configurations and alert settings are saved correctly and trigger appropriate notifications in response to market events."
+    "title": "strategy management configuration and alert triggering",
+    "description": "Test the trading strategy configuration and management tools including saving strategies and triggering alerts and notifications based on market events."
   },
   {
     "id": "TC010",
     "title": "user settings api key management and preferences",
-    "description": "Verify that user settings including API key management and preferences are saved and persisted correctly with backend synchronization."
+    "description": "Verify that user settings including API key management and preferences are saved correctly and persist in the backend."
   }
 ]

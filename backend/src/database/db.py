@@ -6,16 +6,24 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from ..config import settings
 
 # 비동기 엔진 - 커넥션 풀 설정 (20명 기준)
-engine = create_async_engine(
-    settings.database_url,
-    echo=settings.debug,
-    future=True,
-    pool_size=10,  # 기본 커넥션 10개
-    max_overflow=20,  # 추가로 최대 20개 (총 30개)
-    pool_timeout=30,  # 30초 대기
-    pool_recycle=3600,  # 1시간마다 커넥션 재생성
-    pool_pre_ping=True,  # 커넥션 사용 전 유효성 체크
-)
+engine_args = {
+    "echo": settings.debug,
+    "future": True,
+}
+
+# SQLite가 아닐 경우에만 pool 설정 추가
+if "sqlite" not in settings.database_url:
+    engine_args.update(
+        {
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_timeout": 30,
+            "pool_recycle": 3600,
+            "pool_pre_ping": True,
+        }
+    )
+
+engine = create_async_engine(settings.database_url, **engine_args)
 AsyncSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )

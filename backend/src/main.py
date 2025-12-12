@@ -215,42 +215,68 @@ def create_app() -> FastAPI:
     # 전역 에러 핸들러 등록
     register_exception_handlers(app)
 
-    # Routers
-    app.include_router(health.router)  # Health check (먼저 등록 - 인증 불필요)
-    app.include_router(auth.router)
-    app.include_router(oauth.router)  # OAuth (Google, Kakao)
-    app.include_router(two_factor.router)  # 2FA (NEW)
-    app.include_router(bot.router)
-    app.include_router(bot_instances.router)  # 다중 봇 시스템 API (NEW)
-    app.include_router(grid_bot.router)  # 그리드 봇 API (NEW)
-    app.include_router(admin_diagnostics.router)
-    app.include_router(admin_monitoring.router)
-    app.include_router(admin_users.router)
-    app.include_router(admin_bots.router)  # Admin bot control
-    app.include_router(admin_analytics.router)  # Admin analytics
-    app.include_router(admin_logs.router)  # Admin logs (NEW)
-    app.include_router(strategy.router)
-    app.include_router(chart.router)
-    app.include_router(annotations.router)  # Chart Annotations API (NEW)
-    app.include_router(order.router)
-    app.include_router(account.router)
-    app.include_router(backtest.router)
-    app.include_router(backtest_result.router)
-    app.include_router(backtest_history.router)
-    app.include_router(ai_strategy.router)
-    app.include_router(api_status.router)
-    app.include_router(trades.router)
-    app.include_router(analytics.router)  # Analytics API
-    app.include_router(positions.router)  # Positions API (NEW)
-    app.include_router(alerts.router)  # Alerts API (NEW)
-    app.include_router(bitget_market.router)  # Bitget Market API (NEW)
-    app.include_router(upload.router)  # File Upload API (NEW)
-    app.include_router(telegram.router)  # Telegram Bot API (NEW)
-    app.include_router(grid_template.router)  # Grid Template 사용자 API (NEW)
-    app.include_router(admin_grid_template.router)  # Grid Template 관리자 API (NEW)
-    app.include_router(user_backtest.router)  # 일반 회원용 캐시 백테스트 (NEW)
-    app.include_router(trend_template.router)  # AI 추세 템플릿 사용자 API (NEW)
-    app.include_router(ws_server.router)
+    # ============================================================
+    # API 라우터 등록 - /api/v1 접두사로 표준화
+    # ============================================================
+    from fastapi import APIRouter
+
+    api_v1_router = APIRouter(prefix="/api/v1")
+
+    # 인증 관련
+    api_v1_router.include_router(auth.router)
+    api_v1_router.include_router(oauth.router)  # OAuth (Google, Kakao)
+    api_v1_router.include_router(two_factor.router)  # 2FA
+
+    # 봇 관리
+    api_v1_router.include_router(bot.router)
+    api_v1_router.include_router(bot_instances.router)  # 다중 봇 시스템
+    api_v1_router.include_router(grid_bot.router)  # 그리드 봇
+
+    # 전략 및 백테스트
+    api_v1_router.include_router(strategy.router)
+    api_v1_router.include_router(ai_strategy.router)
+    api_v1_router.include_router(backtest.router)
+    api_v1_router.include_router(backtest_result.router)
+    api_v1_router.include_router(backtest_history.router)
+    api_v1_router.include_router(user_backtest.router)  # 캐시 백테스트
+
+    # 거래 및 계정
+    api_v1_router.include_router(account.router)
+    api_v1_router.include_router(order.router)
+    api_v1_router.include_router(trades.router)
+    api_v1_router.include_router(positions.router)
+    api_v1_router.include_router(bitget_market.router)  # Bitget Market
+
+    # 차트 및 분석
+    api_v1_router.include_router(chart.router)
+    api_v1_router.include_router(annotations.router)  # 차트 어노테이션
+    api_v1_router.include_router(analytics.router)
+
+    # 템플릿
+    api_v1_router.include_router(grid_template.router)  # Grid 템플릿 (사용자)
+    api_v1_router.include_router(trend_template.router)  # Trend 템플릿 (사용자)
+
+    # 알림 및 설정
+    api_v1_router.include_router(alerts.router)
+    api_v1_router.include_router(telegram.router)
+    api_v1_router.include_router(upload.router)
+    api_v1_router.include_router(api_status.router)
+
+    # 관리자 전용
+    api_v1_router.include_router(admin_diagnostics.router)
+    api_v1_router.include_router(admin_monitoring.router)
+    api_v1_router.include_router(admin_users.router)
+    api_v1_router.include_router(admin_bots.router)
+    api_v1_router.include_router(admin_analytics.router)
+    api_v1_router.include_router(admin_logs.router)
+    api_v1_router.include_router(admin_grid_template.router)  # Grid 템플릿 (관리자)
+
+    # API v1 라우터 등록
+    app.include_router(api_v1_router)
+
+    # 루트 레벨 라우터 (prefix 없음)
+    app.include_router(health.router)  # /health - 헬스체크
+    app.include_router(ws_server.router)  # /ws - 웹소켓
 
     # Note: Startup logic has been moved to lifespan in db.py
     # @app.on_event("startup") is ignored when lifespan is used
