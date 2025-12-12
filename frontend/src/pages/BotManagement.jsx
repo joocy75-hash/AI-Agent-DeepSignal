@@ -67,7 +67,7 @@ export default function BotManagement() {
     const [runningCount, setRunningCount] = useState(0);
     const [loading, setLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('all');
+    const [activeTab, setActiveTab] = useState('ai_trend');  // 기본 탭: AI 추세
 
     // 전략 컨텍스트 - 템플릿 컴셉으로 사용 안함
     // const { getActiveStrategies } = useStrategies();
@@ -90,9 +90,8 @@ export default function BotManagement() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // 봇 필터링
+    // 봇 필터링 (전체 탭 삭제됨)
     const filteredBots = useMemo(() => {
-        if (activeTab === 'all') return bots;
         if (activeTab === 'ai_trend') return bots.filter((b) => b.bot_type === 'ai_trend');
         if (activeTab === 'grid') return bots.filter((b) => b.bot_type === 'grid');
         return bots;
@@ -207,18 +206,8 @@ export default function BotManagement() {
         return value >= 0 ? `+$${formatted}` : `-$${formatted}`;
     };
 
-    // 탭 아이템
+    // 탭 아이템 (전체 탭 삭제)
     const tabItems = [
-        {
-            key: 'all',
-            label: (
-                <Space>
-                    <DashboardOutlined />
-                    전체
-                    <Badge count={bots.length} style={{ backgroundColor: '#0071e3' }} />
-                </Space>
-            ),
-        },
         {
             key: 'ai_trend',
             label: (
@@ -564,7 +553,7 @@ export default function BotManagement() {
                             loadSummary();
                         }}
                     />
-                ) : activeTab === 'grid' ? (
+                ) : (
                     <GridBotTabs
                         gridBots={bots.filter(b => b.bot_type === 'grid')}
                         onStartBot={handleStartBot}
@@ -582,59 +571,6 @@ export default function BotManagement() {
                         availableAllocation={availableAllocation}
                         onRefresh={loadBots}
                     />
-                ) : (
-                    <Row gutter={[16, 16]}>
-                        {filteredBots.map((bot) => (
-                            <Col xs={24} sm={12} lg={8} xl={6} key={bot.id}>
-                                {renderBotCard(bot)}
-                            </Col>
-                        ))}
-
-                        {/* 새 봇 추가 카드 숨김 (템플릿 컴셉 사용) */}
-
-                        {/* 전체 빈 상태 */}
-                        {bots.length === 0 && !loading && activeTab === 'all' && (
-                            <Col xs={24}>
-                                <div
-                                    style={{
-                                        textAlign: 'center',
-                                        padding: '60px 20px',
-                                        background: '#ffffff',
-                                        borderRadius: 16,
-                                        border: '1px solid #f5f5f7',
-                                    }}
-                                >
-                                    <RobotOutlined
-                                        style={{
-                                            fontSize: 48,
-                                            color: '#d2d2d7',
-                                            marginBottom: 16,
-                                            display: 'block',
-                                        }}
-                                    />
-                                    <Text
-                                        style={{
-                                            color: '#86868b',
-                                            fontSize: 16,
-                                            display: 'block',
-                                            marginBottom: 8,
-                                        }}
-                                    >
-                                        등록된 봇이 없습니다
-                                    </Text>
-                                    <Text
-                                        style={{
-                                            color: '#aeaeb2',
-                                            fontSize: 13,
-                                        }}
-                                    >
-                                        AI 추세 탭 또는 그리드 탭에서 템플릿을 선택하여
-                                        자동 거래를 시작하세요
-                                    </Text>
-                                </div>
-                            </Col>
-                        )}
-                    </Row>
                 )}
             </Spin>
 
