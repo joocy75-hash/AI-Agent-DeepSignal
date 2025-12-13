@@ -5,6 +5,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { strategyAPI } from '../api/strategy';
+import apiClient from '../api/client';
 
 const StrategyContext = createContext();
 
@@ -52,23 +53,11 @@ export function StrategyProvider({ children }) {
 
     /**
      * 전략 삭제 후 목록 새로고침
+     * Note: apiClient has baseURL='/api/v1', so this calls /api/v1/ai/strategies/{id}
      */
     const deleteStrategy = useCallback(async (strategyId) => {
         try {
-            const token = localStorage.getItem('token');
-            const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-            const response = await fetch(`${API_BASE_URL}/ai/strategies/${strategyId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to delete strategy');
-            }
+            await apiClient.delete(`/ai/strategies/${strategyId}`);
 
             // 즉시 로컬 상태에서 제거
             setStrategies(prev => prev.filter(s => s.id !== strategyId));
@@ -84,26 +73,12 @@ export function StrategyProvider({ children }) {
 
     /**
      * 전략 활성/비활성 토글 후 목록 업데이트
+     * Note: apiClient has baseURL='/api/v1', so this calls /api/v1/strategy/{id}/toggle
      */
     const toggleStrategy = useCallback(async (strategyId) => {
         try {
-            const token = localStorage.getItem('token');
-            const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-            const response = await fetch(`${API_BASE_URL}/strategy/${strategyId}/toggle`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to toggle strategy status');
-            }
-
-            const data = await response.json();
-            const newActiveStatus = data.is_active;
+            const response = await apiClient.patch(`/strategy/${strategyId}/toggle`);
+            const newActiveStatus = response.data.is_active;
 
             // 즉시 로컬 상태 업데이트
             setStrategies(prev => prev.map(s =>

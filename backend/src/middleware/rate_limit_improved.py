@@ -320,3 +320,22 @@ ai_strategy_limiter = EndpointRateLimiter(
     window=RateLimitConfig.WINDOW_HOUR,
     name="ai_strategy_generation"
 )
+
+# DeepSeek API Rate Limiters (Issue #4 - 비용 제어)
+deepseek_limiter_minute = EndpointRateLimiter(
+    limit=RateLimitConfig.USER_DEEPSEEK_PER_MINUTE,
+    window=RateLimitConfig.WINDOW_MINUTE,
+    name="deepseek_per_minute"
+)
+
+deepseek_limiter_hour = EndpointRateLimiter(
+    limit=RateLimitConfig.USER_DEEPSEEK_PER_HOUR,
+    window=RateLimitConfig.WINDOW_HOUR,
+    name="deepseek_per_hour"
+)
+
+deepseek_limiter_day = EndpointRateLimiter(
+    limit=RateLimitConfig.USER_DEEPSEEK_PER_DAY,
+    window=RateLimitConfig.WINDOW_DAY,
+    name="deepseek_per_day"
+)

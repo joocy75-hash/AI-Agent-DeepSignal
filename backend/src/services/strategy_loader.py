@@ -19,13 +19,18 @@ logger = logging.getLogger(__name__)
 STRATEGIES_PATH = os.path.join(os.path.dirname(__file__), "../strategies")
 
 
-def load_strategy_class(strategy_code: str, params_json: Optional[str] = None):
+def load_strategy_class(
+    strategy_code: str,
+    params_json: Optional[str] = None,
+    user_id: Optional[int] = None,
+):
     """
     전략 코드에 따라 적절한 전략 인스턴스 반환
 
     Args:
         strategy_code: 전략 코드 (proven_conservative, proven_balanced, proven_aggressive)
         params_json: 전략 파라미터 JSON 문자열
+        user_id: 사용자 ID (Issue #4: AI Rate Limiting용)
 
     Returns:
         전략 인스턴스 (generate_signal 메서드를 가진 객체)
@@ -81,6 +86,59 @@ def load_strategy_class(strategy_code: str, params_json: Optional[str] = None):
                     return generate_signal(candles, self.params, current_position)
 
             return AIRoleDivisionStrategy(params)
+
+        # 5. DeepSeek AI 실시간 투자 판단 전략 (NEW!)
+        elif strategy_code == "deepseek_ai":
+            logger.info("🤖 Loading DeepSeek AI Strategy (Real-time AI Trading)")
+            from ..services.deepseek_service import deepseek_service
+
+            class DeepSeekAIStrategy:
+                def __init__(self, params, user_id=None):
+                    self.params = params
+                    self.symbol = params.get("symbol", "BTCUSDT")
+                    self.call_count = 0
+                    self.user_id = user_id  # Issue #4: For Rate Limiting
+                    self.last_signal = None
+                    # API 비용 절약: N번에 1번만 AI 호출 (기본 5번마다)
+                    self.ai_call_interval = params.get("ai_call_interval", 5)
+
+                def generate_signal(self, current_price, candles, current_position=None):
+                    self.call_count += 1
+
+                    # AI 호출 간격 체크 (API 비용 절약)
+                    if self.call_count % self.ai_call_interval != 0 and self.last_signal:
+                        # 이전 시그널 재사용 (hold로 변경)
+                        return {
+                            **self.last_signal,
+                            "action": "hold",
+                            "reason": f"AI 대기 중 ({self.call_count % self.ai_call_interval}/{self.ai_call_interval})",
+                        }
+
+                    # DeepSeek AI 호출
+                    try:
+                        signal = deepseek_service.get_trading_signal(
+                            symbol=self.symbol,
+                            current_price=current_price,
+                            candles=candles,
+                            current_position=current_position,
+                            strategy_params=self.params,
+                            user_id=self.user_id,  # Issue #4: Rate Limiting
+                        )
+                        self.last_signal = signal
+                        logger.info(f"🤖 DeepSeek AI Signal: {signal.get('action')} (confidence: {signal.get('confidence')}, reason: {signal.get('reason')})")
+                        return signal
+                    except Exception as e:
+                        logger.error(f"DeepSeek AI error: {e}")
+                        return {
+                            "action": "hold",
+                            "confidence": 0.0,
+                            "reason": f"AI 오류: {str(e)}",
+                            "stop_loss": None,
+                            "take_profit": None,
+                            "ai_powered": True,
+                        }
+
+            return DeepSeekAIStrategy(params, user_id=user_id)
 
         # 5. 동적 전략 코드 처리 - 보안상 비활성화
         # SECURITY: exec()를 사용한 임의 코드 실행은 심각한 보안 취약점입니다.

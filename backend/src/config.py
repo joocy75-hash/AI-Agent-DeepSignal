@@ -20,6 +20,11 @@ class RateLimitConfig:
     USER_API_KEY_REVEAL_PER_HOUR = 30 if IS_DEVELOPMENT else 3  # API 키 복호화
     USER_AI_STRATEGY_PER_HOUR = 50 if IS_DEVELOPMENT else 5  # AI 전략 생성
 
+    # DeepSeek API Rate Limits (Issue #4 - AI API 비용 제어)
+    USER_DEEPSEEK_PER_MINUTE = 10 if IS_DEVELOPMENT else 2  # DeepSeek API: 분당
+    USER_DEEPSEEK_PER_HOUR = 100 if IS_DEVELOPMENT else 20  # DeepSeek API: 시간당
+    USER_DEEPSEEK_PER_DAY = 1000 if IS_DEVELOPMENT else 100  # DeepSeek API: 일당
+
     # 시간 윈도우 (초)
     WINDOW_MINUTE = 60
     WINDOW_HOUR = 3600

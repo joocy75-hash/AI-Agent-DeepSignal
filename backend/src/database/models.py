@@ -96,6 +96,10 @@ class BotStatus(Base):
     is_running = Column(Boolean, default=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Bot auto-restart tracking (Issue #5)
+    restart_attempts = Column(Integer, default=0, nullable=False)
+    last_restart_attempt = Column(DateTime, nullable=True)
+
 
 class ExitReason(str, Enum):
     take_profit = "take_profit"

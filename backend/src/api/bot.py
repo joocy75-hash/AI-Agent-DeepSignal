@@ -384,13 +384,62 @@ async def stop_bot(
     )
 
 
+async def _attempt_bot_restart(user_id, status, session, manager, cache_manager):
+    """
+    Helper function to attempt bot restart with tracking (Issue #5)
+
+    Updates restart attempt counter and timestamp.
+    Resets counter on success.
+    """
+    from datetime import datetime
+
+    # Update restart tracking
+    status.restart_attempts += 1
+    status.last_restart_attempt = datetime.utcnow()
+    await session.commit()
+
+    logger.info(
+        f"🔄 Attempting bot restart for user {user_id} "
+        f"(attempt {status.restart_attempts}/3)"
+    )
+
+    try:
+        # API 키 유효성 확인
+        from ..services.trade_executor import ensure_client, InvalidApiKeyError
+        try:
+            await ensure_client(user_id, session)
+        except InvalidApiKeyError:
+            logger.warning(f"Cannot auto-restart bot for user {user_id}: Invalid API key")
+            # API 키 없으면 DB를 False로 업데이트
+            status.is_running = False
+            await session.commit()
+            await cache_manager.delete(f"bot_status:{user_id}")
+            return False
+
+        # 봇 재시작
+        await manager.start_bot(user_id)
+        logger.info(f"✅ Bot auto-restarted for user {user_id}")
+
+        # 성공 시 카운터 리셋
+        status.restart_attempts = 0
+        await session.commit()
+
+        # 캐시 무효화
+        await cache_manager.delete(f"bot_status:{user_id}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to auto-restart bot for user {user_id}: {e}")
+        return False
+
+
 @router.get("/status")
 async def bot_status(
     request: Request,
     session: AsyncSession = Depends(get_session),
     user_id: int = Depends(get_current_user_id),
 ):
-    """봇 상태 조회 (강화 버전 - JWT 인증 필요) - 성능 최적화됨"""
+    """봇 상태 조회 (강화 버전 - JWT 인증 필요) - 자동 복구 지원"""
     from datetime import datetime
     from ..services.bot_runner import BotRunner
     from ..workers.manager import BotManager
@@ -416,19 +465,63 @@ async def bot_status(
         is_actually_running = manager.runner.is_running(user_id)
 
         # 데이터베이스와 실제 상태가 다른 경우 처리
-        # 중요: 실제 상태(is_actually_running)를 신뢰하고 DB를 동기화
-        if status and status.is_running != is_actually_running:
+        # 핵심 로직: DB=True but Memory=False → 봇 자동 재시작 (페이지 새로고침 대응)
+        if status and status.is_running and not is_actually_running:
             logger.warning(
-                f"Bot status mismatch for user {user_id}: DB={status.is_running}, Actual={is_actually_running}. "
-                f"Syncing DB to actual state."
+                f"🔄 Bot status mismatch for user {user_id}: DB=True, Actual=False. "
+                f"Auto-restarting bot (strategy_id={status.strategy_id})..."
             )
-            # DB를 실제 상태에 맞게 업데이트 (자동 재시작 하지 않음!)
-            status.is_running = is_actually_running
-            await session.commit()
 
-            # 캐시 무효화
-            from ..utils.cache_manager import cache_manager, make_cache_key
-            await cache_manager.delete(make_cache_key("bot_status", user_id))
+            # 전략이 선택되어 있는 경우에만 자동 재시작
+            if status.strategy_id:
+                # Issue #5: Check restart limits to prevent infinite loops
+                from datetime import datetime, timedelta
+
+                # Check if too many restart attempts
+                if status.restart_attempts >= 3:
+                    logger.error(
+                        f"❌ Max restart attempts (3) reached for user {user_id}. "
+                        f"Stopping bot. User must manually restart or reset counter."
+                    )
+                    status.is_running = False
+                    status.restart_attempts = 0  # Reset for next manual start
+                    await session.commit()
+                    await cache_manager.delete(cache_key)
+                    is_actually_running = False
+
+                # Check if restarted too recently (5 minute cooldown)
+                elif status.last_restart_attempt:
+                    time_since_last = datetime.utcnow() - status.last_restart_attempt
+                    if time_since_last < timedelta(minutes=5):
+                        logger.warning(
+                            f"⏳ Skipping restart for user {user_id}: "
+                            f"Last attempt was {time_since_last.seconds}s ago (cooldown: 5min)"
+                        )
+                        is_actually_running = False
+                    else:
+                        # Cooldown passed, try restart
+                        await _attempt_bot_restart(user_id, status, session, manager, cache_manager)
+                        is_actually_running = manager.is_bot_running(user_id)
+                else:
+                    # First restart attempt
+                    await _attempt_bot_restart(user_id, status, session, manager, cache_manager)
+                    is_actually_running = manager.is_bot_running(user_id)
+            else:
+                # 전략이 없으면 DB를 False로 업데이트
+                logger.warning(f"No strategy selected for user {user_id}, marking bot as stopped")
+                status.is_running = False
+                await session.commit()
+                await cache_manager.delete(cache_key)
+                is_actually_running = False
+
+        # DB=False but Memory=True (비정상 상태) → DB를 True로 동기화
+        elif status and not status.is_running and is_actually_running:
+            logger.warning(
+                f"Bot status mismatch for user {user_id}: DB=False, Actual=True. Syncing DB to True."
+            )
+            status.is_running = True
+            await session.commit()
+            await cache_manager.delete(cache_key)
 
         # 실제 상태를 기준으로 반환
         is_running = is_actually_running
@@ -560,3 +653,40 @@ async def upsert_status(
         status.is_running = is_running
         status.strategy_id = strategy_id
     await session.commit()
+
+
+@router.post("/reset-restart-counter")
+async def reset_restart_counter(
+    session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    봇 재시작 카운터 초기화 (Issue #5)
+
+    문제 해결 후 사용자가 수동으로 재시작 카운터를 리셋할 수 있습니다.
+    3회 재시도 제한에 도달한 후 문제를 해결했을 때 사용합니다.
+    """
+    result = await session.execute(
+        select(BotStatus).where(BotStatus.user_id == user_id)
+    )
+    status = result.scalars().first()
+
+    if not status:
+        raise HTTPException(status_code=404, detail="봇 상태를 찾을 수 없습니다.")
+
+    # 카운터 리셋
+    old_attempts = status.restart_attempts
+    status.restart_attempts = 0
+    status.last_restart_attempt = None
+    await session.commit()
+
+    logger.info(
+        f"Restart counter reset for user {user_id} "
+        f"(was {old_attempts} attempts)"
+    )
+
+    return {
+        "success": True,
+        "message": "재시작 카운터가 초기화되었습니다.",
+        "previous_attempts": old_attempts,
+    }

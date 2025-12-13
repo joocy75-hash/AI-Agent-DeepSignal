@@ -31,10 +31,31 @@ class DeepSeekAIService:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 2000,
+        user_id: Optional[int] = None,
     ) -> Optional[str]:
-        """DeepSeek API 요청"""
+        """
+        DeepSeek API 요청 (Issue #4: Rate Limiting 추가)
+
+        Args:
+            messages: API 메시지
+            temperature: 온도 설정
+            max_tokens: 최대 토큰 수
+            user_id: 사용자 ID (Rate Limiting용, 선택사항)
+        """
         if not self.api_key:
             raise ValueError("DeepSeek API key is not configured")
+
+        # Issue #4: Rate Limiting 체크 (user_id가 있는 경우)
+        if user_id:
+            from src.middleware.rate_limit_improved import (
+                deepseek_limiter_minute,
+                deepseek_limiter_hour,
+                deepseek_limiter_day
+            )
+            # 분당, 시간당, 일당 제한 모두 체크
+            deepseek_limiter_minute.check(user_id)
+            deepseek_limiter_hour.check(user_id)
+            deepseek_limiter_day.check(user_id)
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -201,6 +222,170 @@ Return ONLY the JSON array, no additional text."""
                 },
             },
         ]
+
+    def get_trading_signal(
+        self,
+        symbol: str,
+        current_price: float,
+        candles: List[Dict[str, Any]],
+        current_position: Optional[Dict[str, Any]] = None,
+        strategy_params: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        실시간 AI 투자 판단 (Issue #4: Rate Limiting 지원)
+
+        DeepSeek AI가 시장 데이터를 분석하여 매매 시그널을 생성합니다.
+
+        Args:
+            user_id: 사용자 ID (Rate Limiting용)
+
+        Returns:
+            {
+                "action": "buy" | "sell" | "hold" | "close",
+                "confidence": 0.0 ~ 1.0,
+                "reason": str,
+                "stop_loss": float | None,
+                "take_profit": float | None,
+            }
+        """
+        import json
+        import re
+
+        # 최근 20개 캔들 데이터 준비
+        recent_candles = candles[-20:] if len(candles) >= 20 else candles
+
+        # 기술적 지표 계산
+        closes = [c.get("close", 0) for c in recent_candles]
+        highs = [c.get("high", 0) for c in recent_candles]
+        lows = [c.get("low", 0) for c in recent_candles]
+
+        # RSI 계산 (간단 버전)
+        rsi = self._calculate_rsi(closes)
+
+        # 이동평균 계산
+        ma_short = sum(closes[-9:]) / 9 if len(closes) >= 9 else closes[-1] if closes else 0
+        ma_long = sum(closes[-21:]) / 21 if len(closes) >= 21 else closes[-1] if closes else 0
+
+        # 볼린저 밴드 계산
+        if len(closes) >= 20:
+            ma_20 = sum(closes[-20:]) / 20
+            std_dev = (sum((c - ma_20) ** 2 for c in closes[-20:]) / 20) ** 0.5
+            bb_upper = ma_20 + 2 * std_dev
+            bb_lower = ma_20 - 2 * std_dev
+        else:
+            bb_upper = bb_lower = current_price
+
+        # 포지션 정보 문자열
+        position_info = "포지션 없음"
+        if current_position:
+            pos_side = current_position.get("side", "unknown")
+            pos_entry = current_position.get("entry_price", 0)
+            pos_pnl = ((current_price - pos_entry) / pos_entry * 100) if pos_entry > 0 else 0
+            if pos_side == "short":
+                pos_pnl = -pos_pnl
+            position_info = f"{pos_side.upper()} 포지션, 진입가: ${pos_entry:,.2f}, 현재 수익률: {pos_pnl:.2f}%"
+
+        system_prompt = """You are an expert cryptocurrency trader AI. Analyze market data and provide trading signals.
+
+IMPORTANT: You MUST respond with ONLY a valid JSON object. No explanations, no markdown, just pure JSON.
+
+Response format (STRICT JSON):
+{"action": "buy|sell|hold|close", "confidence": 0.0-1.0, "reason": "brief reason in Korean", "stop_loss": price_or_null, "take_profit": price_or_null}
+
+Rules:
+- action: "buy" for long entry, "sell" for short entry, "hold" for no action, "close" for exit position
+- confidence: 0.0 (no confidence) to 1.0 (very confident)
+- Only suggest "buy" or "sell" when confidence >= 0.6
+- If position exists and losing > 2%, consider "close"
+- If position exists and profit > 3%, consider "close" for take profit"""
+
+        user_prompt = f"""Analyze {symbol} and provide trading signal:
+
+Current Price: ${current_price:,.2f}
+RSI (14): {rsi:.1f}
+MA9: ${ma_short:,.2f}
+MA21: ${ma_long:,.2f}
+BB Upper: ${bb_upper:,.2f}
+BB Lower: ${bb_lower:,.2f}
+Recent High: ${max(highs) if highs else current_price:,.2f}
+Recent Low: ${min(lows) if lows else current_price:,.2f}
+
+Position: {position_info}
+
+Respond with JSON only:"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            response = self._make_request(
+                messages,
+                temperature=0.3,
+                max_tokens=200,
+                user_id=user_id  # Issue #4: Rate Limiting
+            )
+
+            if response:
+                # JSON 추출
+                json_match = re.search(r'\{[^{}]*\}', response)
+                if json_match:
+                    signal = json.loads(json_match.group())
+
+                    # 유효성 검사
+                    action = signal.get("action", "hold").lower()
+                    if action not in ["buy", "sell", "hold", "close"]:
+                        action = "hold"
+
+                    confidence = float(signal.get("confidence", 0.5))
+                    confidence = max(0.0, min(1.0, confidence))
+
+                    return {
+                        "action": action,
+                        "confidence": confidence,
+                        "reason": signal.get("reason", "AI 분석 완료"),
+                        "stop_loss": signal.get("stop_loss"),
+                        "take_profit": signal.get("take_profit"),
+                        "ai_powered": True,
+                    }
+
+            # 실패 시 기본 hold
+            return self._default_hold_signal("AI 응답 파싱 실패")
+
+        except Exception as e:
+            print(f"DeepSeek trading signal error: {str(e)}")
+            return self._default_hold_signal(f"AI 오류: {str(e)}")
+
+    def _calculate_rsi(self, closes: List[float], period: int = 14) -> float:
+        """RSI 계산"""
+        if len(closes) < period + 1:
+            return 50.0
+
+        deltas = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+        gains = [d if d > 0 else 0 for d in deltas[-period:]]
+        losses = [-d if d < 0 else 0 for d in deltas[-period:]]
+
+        avg_gain = sum(gains) / period
+        avg_loss = sum(losses) / period
+
+        if avg_loss == 0:
+            return 100.0
+
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+
+    def _default_hold_signal(self, reason: str = "대기") -> Dict[str, Any]:
+        """기본 홀드 시그널"""
+        return {
+            "action": "hold",
+            "confidence": 0.5,
+            "reason": reason,
+            "stop_loss": None,
+            "take_profit": None,
+            "ai_powered": True,
+        }
 
     def analyze_market(self, symbol: str, timeframe: str, data: Dict[str, Any]) -> str:
         """시장 분석"""
