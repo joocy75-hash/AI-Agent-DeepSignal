@@ -1347,62 +1347,38 @@ class BotRunner:
         - 에이전트 시스템 통합 (MarketRegime, SignalValidator, RiskMonitor)
         """
         logger.info(f"Starting bot loop for user {user_id}")
-        logger.info(f"🔍 [DEBUG] Reached agent startup section")
 
         # ===== Agent System 시작 (한 번만) =====
         try:
             # Market Regime Agent 시작
-            logger.info(f"🔍 [DEBUG] MarketRegime Agent state: {self.market_regime.state}")
-            market_needs_start = self.market_regime.state != AgentState.RUNNING
-            logger.info(f"🔍 [DEBUG] MarketRegime needs start: {market_needs_start}")
-
-            if market_needs_start:
+            if self.market_regime.state != AgentState.RUNNING:
                 try:
-                    logger.info(f"🔍 [DEBUG] Calling market_regime.start()...")
                     await self.market_regime.start()
                     logger.info("✅ MarketRegime Agent started (legacy bot)")
                 except Exception as e:
                     logger.error(f"❌ Failed to start MarketRegime Agent: {e}", exc_info=True)
-            else:
-                logger.info(f"⏭️  MarketRegime Agent already running, skipping")
 
             # Signal Validator Agent 시작
-            logger.info(f"🔍 [DEBUG] SignalValidator Agent state: {self.signal_validator.state}")
-            validator_needs_start = self.signal_validator.state != AgentState.RUNNING
-            logger.info(f"🔍 [DEBUG] SignalValidator needs start: {validator_needs_start}")
-
-            if validator_needs_start:
+            if self.signal_validator.state != AgentState.RUNNING:
                 try:
-                    logger.info(f"🔍 [DEBUG] Calling signal_validator.start()...")
                     await self.signal_validator.start()
                     logger.info("✅ SignalValidator Agent started (legacy bot)")
                 except Exception as e:
                     logger.error(f"❌ Failed to start SignalValidator Agent: {e}", exc_info=True)
-            else:
-                logger.info(f"⏭️  SignalValidator Agent already running, skipping")
 
             # Risk Monitor Agent 시작
-            logger.info(f"🔍 [DEBUG] RiskMonitor Agent state: {self.risk_monitor.state}")
-            risk_needs_start = self.risk_monitor.state != AgentState.RUNNING
-            logger.info(f"🔍 [DEBUG] RiskMonitor needs start: {risk_needs_start}")
-
-            if risk_needs_start:
+            if self.risk_monitor.state != AgentState.RUNNING:
                 try:
-                    logger.info(f"🔍 [DEBUG] Calling risk_monitor.start()...")
                     await self.risk_monitor.start()
                     logger.info("✅ RiskMonitor Agent started (legacy bot)")
                 except Exception as e:
                     logger.error(f"❌ Failed to start RiskMonitor Agent: {e}", exc_info=True)
-            else:
-                logger.info(f"⏭️  RiskMonitor Agent already running, skipping")
 
             # 주기적 에이전트 태스크 시작 (한 번만)
             # Note: Legacy bot은 user_id를 bot_instance_id로 사용
             pseudo_bot_id = user_id * 1000  # user 1 -> 1000, user 2 -> 2000
-            logger.info(f"🔍 [DEBUG] Calling _start_periodic_agents(bot_id={pseudo_bot_id}, user_id={user_id})...")
             try:
                 await self._start_periodic_agents(pseudo_bot_id, user_id)
-                logger.info(f"✅ Periodic agents started")
             except Exception as e:
                 logger.error(f"❌ Failed to start periodic agents: {e}", exc_info=True)
 
@@ -2419,10 +2395,10 @@ class BotRunner:
 
     async def _start_periodic_agents(self, bot_instance_id: int, user_id: int):
         """
-        주기적 에이전트 태스크 시작
+        주기적 에이전트 태스크 시작 (선물거래 최적화)
 
-        - MarketRegimeAgent: 1분마다 시장 환경 분석
-        - RiskMonitorAgent: 30초마다 리스크 체크
+        - MarketRegimeAgent: 10분마다 시장 환경 분석 (트렌드는 단기적으로 안정적)
+        - RiskMonitorAgent: 2분마다 리스크 체크 (레버리지 청산 위험 모니터링)
 
         각 태스크는 봇이 실행 중일 때만 동작하고, 봇 종료 시 자동으로 정지됩니다.
         """
@@ -2431,23 +2407,23 @@ class BotRunner:
             logger.debug("Periodic agents already running")
             return
 
-        # MarketRegime 주기적 실행 (1분마다)
+        # MarketRegime 주기적 실행 (10분마다)
         market_task = asyncio.create_task(
             self._periodic_market_regime_analysis(bot_instance_id)
         )
         self._periodic_tasks["market_regime_periodic"] = market_task
-        logger.info("🔄 Started periodic MarketRegime analysis (every 1min)")
+        logger.info("✅ Started MarketRegime periodic task (10분 주기)")
 
-        # RiskMonitor 주기적 실행 (30초마다)
+        # RiskMonitor 주기적 실행 (2분마다)
         risk_task = asyncio.create_task(
             self._periodic_risk_monitoring(bot_instance_id, user_id)
         )
         self._periodic_tasks["risk_monitor_periodic"] = risk_task
-        logger.info("🔄 Started periodic RiskMonitor checks (every 30sec)")
+        logger.info("✅ Started RiskMonitor periodic task (2분 주기)")
 
     async def _periodic_market_regime_analysis(self, bot_instance_id: int):
         """
-        MarketRegimeAgent 주기적 실행 (1분마다)
+        MarketRegimeAgent 주기적 실행 (10분마다)
 
         시장 환경을 분석하여 Redis에 저장합니다.
         다른 컴포넌트(SignalValidator 등)에서 참조 가능합니다.
@@ -2482,20 +2458,20 @@ class BotRunner:
             except Exception as e:
                 logger.error(f"Periodic market regime analysis error: {e}")
 
-            # 1분 대기
-            await asyncio.sleep(60)
+            # 10분 대기
+            await asyncio.sleep(600)
 
         logger.info("Periodic MarketRegime analysis stopped (bot stopped)")
 
     async def _periodic_risk_monitoring(self, bot_instance_id: int, user_id: int):
         """
-        RiskMonitorAgent 주기적 실행 (30초마다)
+        RiskMonitorAgent 주기적 실행 (2분마다)
 
-        계좌 리스크를 지속적으로 감시합니다:
+        선물거래 리스크를 지속적으로 감시합니다:
         - 일일 손익 체크
         - 포지션 크기 체크
         - 연속 손실 체크
-        - 청산가 접근 경고
+        - 청산가 접근 경고 (레버리지 거래 위험 관리)
         """
         while bot_instance_id in self.instance_tasks:
             try:
@@ -2533,7 +2509,7 @@ class BotRunner:
             except Exception as e:
                 logger.error(f"Periodic risk monitoring error: {e}")
 
-            # 30초 대기
-            await asyncio.sleep(30)
+            # 2분 대기
+            await asyncio.sleep(120)
 
         logger.info("Periodic RiskMonitor checks stopped (bot stopped)")
