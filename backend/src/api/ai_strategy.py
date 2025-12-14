@@ -144,7 +144,16 @@ async def list_ai_strategies(
     )
 
     def parse_strategy(s):
-        params = json.loads(s.params) if s.params else {}
+        # JSON 파싱 시 예외 처리 (레거시 데이터 호환)
+        params = {}
+        if s.params:
+            try:
+                params = json.loads(s.params)
+            except json.JSONDecodeError:
+                # 레거시 형식의 params는 빈 dict로 처리
+                logger.warning(f"[AI Strategy] Invalid JSON in params for strategy {s.id}: {s.params[:50]}...")
+                params = {"_raw": s.params}  # 원본 보존
+
         leverage = params.get("leverage", 1)
         # 위험도 결정: leverage 기준
         if leverage >= 10:
