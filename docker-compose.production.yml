@@ -1,0 +1,200 @@
+# ============================================================
+# AI Trading Platform - Group C Production Configuration
+# Server: 5.161.112.248 (Hetzner - deep-server)
+# Path: ~/service_c/ai-trading-platform
+# ============================================================
+# Resource Allocation (Total: ~4GB of 8GB available):
+# - Backend: 2GB (AI agents, FastAPI)
+# - PostgreSQL: 1GB
+# - Frontend: 256MB
+# - Admin: 256MB
+# - Redis: 256MB
+# ============================================================
+
+# Version is obsolete in modern Docker Compose
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: groupc-postgres
+    environment:
+      POSTGRES_DB: trading_prod
+      POSTGRES_USER: trading_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - groupc_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trading_user -d trading_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - group_c_network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: groupc-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD required} --maxmemory 200mb --maxmemory-policy allkeys-lru
+    volumes:
+      - groupc_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - group_c_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+
+  # Backend (FastAPI + AI Agents)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: groupc-backend
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://trading_user:${POSTGRES_PASSWORD}@postgres:5432/trading_prod
+
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+
+      # App Settings
+      DEBUG: "False"
+      ENVIRONMENT: production
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://ai-deepsignal.com,https://admin.ai-deepsignal.com}
+
+      # Redis
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # AI Service
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Telegram (optional)
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./backend/logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: always
+    networks:
+      - group_c_network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+
+  # Frontend (User Dashboard)
+  # Note: Port 3000 is used by Freqtrade UI, using 3001 instead
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:?VITE_API_URL required}
+    container_name: groupc-frontend
+    ports:
+      - "3001:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: always
+    networks:
+      - group_c_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+
+  # Admin Frontend
+  admin-frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:?VITE_API_URL required}
+    container_name: groupc-admin
+    ports:
+      - "4000:4000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:4000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: always
+    networks:
+      - group_c_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+
+volumes:
+  groupc_postgres_data:
+    driver: local
+  groupc_redis_data:
+    driver: local
+
+networks:
+  group_c_network:
+    external: true
+    name: group_c_network
