@@ -314,14 +314,12 @@ export default function MainLayout({ children }) {
             )}
 
             {/* Main Content Area */}
-            {/* 성능 최적화: will-change 힌트 + 짧은 전환 시간 */}
+            {/* 성능 최적화: 전환 애니메이션 완전 제거 - 즉각 반응 */}
             <Layout
                 style={{
                     marginLeft: isMobile ? 0 : (collapsed ? 80 : 260),
-                    transition: 'margin-left 0.15s ease-out',
                     background: '#f5f5f7',
                     minHeight: '100vh',
-                    willChange: 'margin-left',
                 }}
             >
                 {/* Header */}

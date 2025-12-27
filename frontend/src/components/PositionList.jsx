@@ -15,6 +15,13 @@ import { useWebSocket } from '../context/WebSocketContext';
 
 const { Text } = Typography;
 
+// 포지션 데이터 캐시 (세션 동안 유지 - 페이지 전환 시에도 데이터 보존)
+let positionsCache = {
+    data: null,
+    timestamp: 0,
+};
+const POSITION_CACHE_TTL = 30000; // 30초 캐시 유효
+
 // 코인별 색상 맵
 const coinColors = {
     'BTC': '#F7931A', 'ETH': '#627EEA', 'BNB': '#F3BA2F', 'XRP': '#23292F',
@@ -142,12 +149,27 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
         }
     }, []);
 
-    const loadPositions = useCallback(async (showLoading = false) => {
+    const loadPositions = useCallback(async (showLoading = false, forceRefresh = false) => {
         // 중복 로딩 방지
         if (isLoadingRef.current) return;
+
+        const now = Date.now();
+
+        // 캐시가 유효하고 강제 새로고침이 아니면 캐시 사용 (로딩 표시 없음)
+        if (!forceRefresh && positionsCache.data && (now - positionsCache.timestamp < POSITION_CACHE_TTL)) {
+            if (prevPositionsRef.current !== JSON.stringify(positionsCache.data)) {
+                prevPositionsRef.current = JSON.stringify(positionsCache.data);
+                setPositions(positionsCache.data);
+            }
+            setInitialLoading(false);
+            setLoading(false);
+            return;
+        }
+
         isLoadingRef.current = true;
 
-        if (showLoading) setLoading(true);
+        // 캐시가 없을 때만 로딩 표시 (첫 로딩)
+        if (showLoading && !positionsCache.data) setLoading(true);
 
         try {
             if (useBitget) {
@@ -199,6 +221,12 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
                         };
                     }).filter(pos => pos.size > 0);
 
+                    // 캐시에 저장
+                    positionsCache = {
+                        data: formattedPositions,
+                        timestamp: Date.now(),
+                    };
+
                     // 데이터가 실제로 변경되었을 때만 업데이트
                     const newDataStr = JSON.stringify(formattedPositions);
                     if (prevPositionsRef.current !== newDataStr) {
@@ -215,6 +243,12 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
 
             const data = await accountAPI.getPositions();
             const positionsList = Array.isArray(data) ? data : (data.data || []);
+
+            // 캐시에 저장
+            positionsCache = {
+                data: positionsList,
+                timestamp: Date.now(),
+            };
 
             const newDataStr = JSON.stringify(positionsList);
             if (prevPositionsRef.current !== newDataStr) {
@@ -233,7 +267,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
 
     // 초기 로딩
     useEffect(() => {
-        loadPositions(true);
+        loadPositions(true, true);
     }, []);
 
     // 자동 새로고침 (별도 useEffect로 분리하여 의존성 문제 해결)
@@ -404,7 +438,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
                         )
                     });
 
-                    await loadPositions(true);
+                    await loadPositions(true, true);
 
                     if (onPositionClosed) {
                         onPositionClosed({ panic_close: true, success: successCount, failed: failCount });
@@ -432,7 +466,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
                     if (useBitget) {
                         try {
                             result = await bitgetAPI.closePosition(position.symbol, position.side, null);
-                            await loadPositions(true);
+                            await loadPositions(true, true);
                             if (onPositionClosed) onPositionClosed(result);
                             return;
                         } catch (bitgetError) {
@@ -442,7 +476,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
 
                     result = await orderAPI.closePosition(position.id, position.symbol, position.side);
                     if (result.status === 'filled') {
-                        await loadPositions(true);
+                        await loadPositions(true, true);
                         if (onPositionClosed) onPositionClosed(result);
                     } else {
                         Modal.error({ title: '청산 실패', content: `상태: ${result.status}` });
@@ -610,7 +644,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
                     </Button>
                     <Button
                         icon={<ReloadOutlined />}
-                        onClick={() => loadPositions(true)}
+                        onClick={() => loadPositions(true, true)}
                         loading={loading}
                         style={{ fontWeight: '500' }}
                     >

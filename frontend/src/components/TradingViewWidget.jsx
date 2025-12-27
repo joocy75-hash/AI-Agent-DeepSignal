@@ -1,10 +1,14 @@
 import { useEffect, useRef, memo, useState, useCallback } from 'react';
-import { Spin, Typography } from 'antd';
+import { Typography } from 'antd';
 import { DownOutlined, ReloadOutlined } from '@ant-design/icons';
 import { createChart } from 'lightweight-charts';
 import { bitgetAPI } from '../api/bitget';
 
 const { Text } = Typography;
+
+// 심볼별 캔들 데이터 캐시 (세션 동안 유지)
+const chartDataCache = new Map();
+const CACHE_TTL = 60000; // 60초 캐시 유효
 
 // 코인 정보 (아이콘, 색상)
 const COIN_DATA = {
@@ -62,12 +66,74 @@ function TradingViewWidget({
         setError(null);
     };
 
-    // 차트 데이터 로드
-    const loadChartData = useCallback(async () => {
+    // 차트 인스턴스 생성 (재사용)
+    const createChartInstance = useCallback(() => {
+        if (!chartContainerRef.current || chartRef.current) return;
+
+        const chart = createChart(chartContainerRef.current, {
+            width: chartContainerRef.current.clientWidth,
+            height: height,
+            layout: {
+                background: { color: '#ffffff' },
+                textColor: '#333',
+            },
+            grid: {
+                vertLines: { color: '#f0f0f0' },
+                horzLines: { color: '#f0f0f0' },
+            },
+            crosshair: {
+                mode: 1,
+            },
+            rightPriceScale: {
+                borderColor: '#e5e7eb',
+            },
+            timeScale: {
+                borderColor: '#e5e7eb',
+                timeVisible: true,
+                secondsVisible: false,
+            },
+        });
+
+        chartRef.current = chart;
+        candleSeriesRef.current = chart.addCandlestickSeries({
+            upColor: '#26a69a',
+            downColor: '#ef5350',
+            borderVisible: false,
+            wickUpColor: '#26a69a',
+            wickDownColor: '#ef5350',
+        });
+    }, [height]);
+
+    // 차트 데이터 로드 (캐시 우선 사용)
+    const loadChartData = useCallback(async (forceRefresh = false) => {
         if (!chartContainerRef.current) return;
 
+        const cacheKey = `${symbol}_15m`;
+        const cached = chartDataCache.get(cacheKey);
+        const now = Date.now();
+
+        // 캐시가 유효하고 강제 새로고침이 아니면 캐시 사용
+        if (!forceRefresh && cached && (now - cached.timestamp < CACHE_TTL)) {
+            // 차트 인스턴스 생성
+            createChartInstance();
+
+            // 캐시된 데이터로 즉시 렌더링 (로딩 표시 없음)
+            if (candleSeriesRef.current) {
+                candleSeriesRef.current.setData(cached.candles);
+                chartRef.current.timeScale().fitContent();
+            }
+            setCurrentPrice(cached.currentPrice);
+            setPriceChange(cached.priceChange);
+            setLoading(false);
+            setError(null);
+            return;
+        }
+
         try {
-            setLoading(true);
+            // 캐시가 없을 때만 로딩 표시
+            if (!cached) {
+                setLoading(true);
+            }
             setError(null);
 
             // Bitget API에서 캔들 데이터 가져오기
@@ -77,41 +143,8 @@ function TradingViewWidget({
                 throw new Error('캔들 데이터가 없습니다');
             }
 
-            // 차트가 없으면 생성
-            if (!chartRef.current) {
-                const chart = createChart(chartContainerRef.current, {
-                    width: chartContainerRef.current.clientWidth,
-                    height: height,
-                    layout: {
-                        background: { color: '#ffffff' },
-                        textColor: '#333',
-                    },
-                    grid: {
-                        vertLines: { color: '#f0f0f0' },
-                        horzLines: { color: '#f0f0f0' },
-                    },
-                    crosshair: {
-                        mode: 1,
-                    },
-                    rightPriceScale: {
-                        borderColor: '#e5e7eb',
-                    },
-                    timeScale: {
-                        borderColor: '#e5e7eb',
-                        timeVisible: true,
-                        secondsVisible: false,
-                    },
-                });
-
-                chartRef.current = chart;
-                candleSeriesRef.current = chart.addCandlestickSeries({
-                    upColor: '#26a69a',
-                    downColor: '#ef5350',
-                    borderVisible: false,
-                    wickUpColor: '#26a69a',
-                    wickDownColor: '#ef5350',
-                });
-            }
+            // 차트 인스턴스 생성
+            createChartInstance();
 
             // 캔들 데이터 포맷 변환 (lightweight-charts 형식)
             const formattedCandles = response.candles.map(candle => ({
@@ -123,13 +156,24 @@ function TradingViewWidget({
             }));
 
             // 현재가 및 변동률 계산
+            let newCurrentPrice = null;
+            let newPriceChange = null;
             if (formattedCandles.length > 0) {
                 const lastCandle = formattedCandles[formattedCandles.length - 1];
                 const firstCandle = formattedCandles[0];
-                setCurrentPrice(lastCandle.close);
-                const change = ((lastCandle.close - firstCandle.open) / firstCandle.open) * 100;
-                setPriceChange(change);
+                newCurrentPrice = lastCandle.close;
+                newPriceChange = ((lastCandle.close - firstCandle.open) / firstCandle.open) * 100;
+                setCurrentPrice(newCurrentPrice);
+                setPriceChange(newPriceChange);
             }
+
+            // 캐시에 저장
+            chartDataCache.set(cacheKey, {
+                candles: formattedCandles,
+                currentPrice: newCurrentPrice,
+                priceChange: newPriceChange,
+                timestamp: now,
+            });
 
             // 차트에 데이터 설정
             if (candleSeriesRef.current) {
@@ -144,7 +188,7 @@ function TradingViewWidget({
             setError(err.message || '차트 데이터를 불러올 수 없습니다');
             setLoading(false);
         }
-    }, [symbol, height]);
+    }, [symbol, createChartInstance]);
 
     // 심볼 변경 시 차트 재로드
     useEffect(() => {
@@ -293,7 +337,7 @@ function TradingViewWidget({
                         {isMobile ? '15m' : '15분'}
                     </div>
                     <div
-                        onClick={() => !loading && loadChartData()}
+                        onClick={() => !loading && loadChartData(true)}
                         style={{
                             padding: '8px',
                             borderRadius: '8px',
@@ -434,7 +478,7 @@ function TradingViewWidget({
                     }}>
                         <Text type="danger">{error}</Text>
                         <div
-                            onClick={loadChartData}
+                            onClick={() => loadChartData(true)}
                             style={{
                                 padding: '8px 16px',
                                 background: '#1890ff',
