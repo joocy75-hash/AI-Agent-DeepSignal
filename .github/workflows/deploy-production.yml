@@ -59,7 +59,7 @@ jobs:
           cd backend
           python -m py_compile src/main.py
           python -m py_compile src/services/bot_runner.py
-          python -m py_compile src/strategies/eth_ai_autonomous_40pct_strategy.py
+          python -m py_compile src/strategies/eth_ai_fusion_strategy.py
           echo "✅ Python syntax check passed"
 
       - name: Set up Node.js
