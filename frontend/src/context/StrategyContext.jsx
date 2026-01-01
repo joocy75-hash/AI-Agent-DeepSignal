@@ -37,14 +37,6 @@ export function StrategyProvider({ children }) {
 
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                console.log('[StrategyContext] No token, skipping strategy load');
-                setStrategies([]);
-                setLoading(false);
-                return;
-            }
-
             const data = await strategyAPI.getAIStrategies();
             const allStrategies = data.strategies || [];
 
@@ -124,10 +116,7 @@ export function StrategyProvider({ children }) {
 
     // 초기 로드
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            loadStrategies();
-        }
+        loadStrategies();
     }, [loadStrategies]);
 
     // Memoize context value to prevent unnecessary re-renders of consumers

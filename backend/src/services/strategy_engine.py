@@ -1,6 +1,5 @@
 from collections import deque
-import json
-from typing import Deque, List
+from typing import Deque
 
 BUFFER_SIZE = 200
 _candle_buffers: dict[str, Deque[dict]] = {}
@@ -12,67 +11,6 @@ def _ensure_buffer(symbol: str) -> Deque[dict]:
     return _candle_buffers[symbol]
 
 
-def _ema(values: List[float], period: int) -> float:
-    if not values or len(values) < period:
-        return values[-1] if values else 0.0
-    k = 2 / (period + 1)
-    ema = values[0]
-    for price in values[1:]:
-        ema = price * k + ema * (1 - k)
-    return ema
-
-
-def rsi_reversal(price: float, candles: list, params: dict | None = None) -> str:
-    params = params or {}
-    length = int(params.get("rsi_length", 14))
-    closes = [c["close"] for c in candles[-length - 1 :]]
-    gains = sum(max(0, closes[i + 1] - closes[i]) for i in range(len(closes) - 1))
-    losses = sum(max(0, closes[i] - closes[i + 1]) for i in range(len(closes) - 1))
-    if losses == 0:
-        return "buy" if price > closes[-1] else "hold"
-    rs = gains / losses
-    rsi = 100 - (100 / (1 + rs))
-    if rsi < 30:
-        return "buy"
-    if rsi > 70:
-        return "sell"
-    return "hold"
-
-
-def ema_cross(price: float, candles: list, params: dict | None = None) -> str:
-    params = params or {}
-    fast = int(params.get("ema_fast", 9))
-    slow = int(params.get("ema_slow", 21))
-    closes = [c["close"] for c in candles]
-    fast_ema = _ema(closes[-fast:], fast) if len(closes) >= fast else closes[-1]
-    slow_ema = _ema(closes[-slow:], slow) if len(closes) >= slow else closes[-1]
-    if fast_ema > slow_ema:
-        return "buy"
-    if fast_ema < slow_ema:
-        return "sell"
-    return "hold"
-
-
-def breakout(price: float, candles: list, params: dict | None = None) -> str:
-    params = params or {}
-    lookback = int(params.get("lookback", 20))
-    window = candles[-lookback:] if len(candles) >= lookback else candles
-    highs = [c["high"] for c in window]
-    lows = [c["low"] for c in window]
-    if not highs or not lows:
-        return "hold"
-    if price > max(highs):
-        return "buy"
-    if price < min(lows):
-        return "sell"
-    return "hold"
-
-
-def ai_signal(price: float, candles: list, params: dict | None = None) -> str:
-    # placeholder
-    return "buy" if price % 2 == 0 else "sell"
-
-
 def run(
     strategy_code: str,
     price: float,
@@ -80,50 +18,9 @@ def run(
     params_json: str | None = None,
     symbol: str = "",
 ) -> str:
+    _ = strategy_code
+    _ = params_json
     buffer = _ensure_buffer(symbol or "global")
     buffer.extend(candles[-BUFFER_SIZE:])
-
-    params = json.loads(params_json) if params_json else {}
-
-    # strategy_code 또는 params의 type으로 전략 결정
-    # strategy_code가 있으면 우선 사용, 없으면 params의 type 사용
-    strategy_type = params.get("type", "")
-
-    # strategy_code 기반 매핑 (우선순위 높음)
-    code_to_type_map = {
-        "rsi_strategy": "rsi",
-        "ema": "ema",
-        "ma_cross": "ema",
-        "breakout": "breakout",
-        "golden_cross": "ema",
-        "trend_following": "ema",
-    }
-
-    if strategy_code in code_to_type_map:
-        strategy_type = code_to_type_map[strategy_code]
-    elif not strategy_type:
-        strategy_type = "ema"  # 기본값
-
-    # 전략 실행
-    if strategy_type == "rsi":
-        signal = rsi_reversal(price, list(buffer), params)
-    elif strategy_type == "ema":
-        signal = ema_cross(price, list(buffer), params)
-    elif strategy_type == "breakout":
-        signal = breakout(price, list(buffer), params)
-    elif strategy_type == "ai":
-        signal = ai_signal(price, list(buffer), params)
-    else:
-        # 기본 전략: EMA 크로스 기반
-        signal = ema_cross(price, list(buffer), params)
-
-    # smoothing via simple filter
-    fast = params.get("ema_fast", 3)
-    slow = params.get("ema_slow", 7)
-    closes = [c["close"] for c in buffer]
-    fast_ema = _ema(closes[-fast:], fast) if len(closes) >= fast else price
-    slow_ema = _ema(closes[-slow:], slow) if len(closes) >= slow else price
-    if abs(fast_ema - slow_ema) < price * 0.001:
-        return "hold"
-
-    return signal
+    _ = price
+    return "hold"

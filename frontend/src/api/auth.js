@@ -6,7 +6,7 @@ export const authAPI = {
    * @param {string} email 
    * @param {string} password 
    * @param {string|null} totpCode - 2FA 코드 (선택적)
-   * @returns {Promise<{access_token?: string, refresh_token?: string, requires_2fa?: boolean, user_id?: number}>}
+   * @returns {Promise<{user?: {id: number, email: string, role: string}, requires_2fa?: boolean, user_id?: number}>}
    */
   login: async (email, password, totpCode = null) => {
     const payload = { email, password };
@@ -40,16 +40,13 @@ export const authAPI = {
     });
     return response.data;
   },
+  logout: async () => {
+    const response = await apiClient.post('/auth/logout');
+    return response.data;
+  },
 
-  /**
-   * Refresh Token을 사용하여 새 Access Token 발급
-   * @param {string} refreshToken 
-   * @returns {Promise<{access_token: string, refresh_token?: string}>}
-   */
-  refreshToken: async (refreshToken) => {
-    const response = await apiClient.post('/auth/refresh', {
-      refresh_token: refreshToken
-    });
+  refreshToken: async () => {
+    const response = await apiClient.post('/auth/refresh');
     return response.data;
   },
 };

@@ -1,0 +1,5 @@
+{
+  "status": "failed",
+  "command": "python -m compileall backend/src tools",
+  "log": "tools/agents/reports/lint_log_20251231_224037.txt"
+}

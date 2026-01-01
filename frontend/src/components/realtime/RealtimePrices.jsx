@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Card, Table, Tag, Badge } from 'antd';
 import { LineChartOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
 import useWebSocket from '../../hooks/useWebSocket';
+import { useAuth } from '../../context/AuthContext';
 
 export default function RealtimePrices() {
     const [prices, setPrices] = useState({});
+    const { user } = useAuth();
     const { isConnected, lastMessage, subscribe, unsubscribe } = useWebSocket(
-        localStorage.getItem('userId')
+        user?.id
     );
 
     useEffect(() => {

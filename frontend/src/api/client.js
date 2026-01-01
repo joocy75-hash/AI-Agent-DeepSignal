@@ -15,17 +15,26 @@ if (import.meta.env.PROD && API_BASE_URL.startsWith('http://')) {
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000, // SECURITY: 15초 타임아웃 설정
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+const getCookie = (name) => {
+  const match = document.cookie.match(new RegExp(`(^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[2]) : null;
+};
+
+// Request interceptor to add CSRF token for mutating requests
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const method = (config.method || 'get').toLowerCase();
+    if (!['get', 'head', 'options'].includes(method)) {
+      const csrfToken = getCookie('csrf_token');
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken;
+      }
     }
     return config;
   },
@@ -61,48 +70,30 @@ apiClient.interceptors.response.use(
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
-        }).then(token => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return apiClient(originalRequest);
-        }).catch(err => Promise.reject(err));
+        }).then(() => apiClient(originalRequest)).catch(err => Promise.reject(err));
       }
 
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          // Refresh Token으로 새 Access Token 발급 시도
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken
-          });
-
-          const { access_token, refresh_token: newRefreshToken } = response.data;
-          localStorage.setItem('token', access_token);
-          if (newRefreshToken) {
-            localStorage.setItem('refreshToken', newRefreshToken);
+      try {
+        const csrfToken = getCookie('csrf_token');
+        await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          null,
+          {
+            withCredentials: true,
+            headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
           }
-
-          processQueue(null, access_token);
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return apiClient(originalRequest);
-        } catch (refreshError) {
-          processQueue(refreshError, null);
-          // Refresh 실패 시 로그아웃
-          localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('userEmail');
-          localStorage.removeItem('userId');
-          window.location.href = '/login';
-          return Promise.reject(refreshError);
-        } finally {
-          isRefreshing = false;
-        }
-      } else {
-        // Refresh Token 없으면 바로 로그아웃
-        localStorage.removeItem('token');
+        );
+        processQueue(null);
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
         window.location.href = '/login';
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);

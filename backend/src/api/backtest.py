@@ -189,7 +189,7 @@ def _run_backtest_background(result_id: int, request_dict: dict, user_id: int):
             request_dict["csv_path"] = csv_path
 
         # 전략 선택
-        strategy_code = request_dict.get("strategy_code", "openclose")
+        strategy_code = request_dict.get("strategy_code", "eth_ai_fusion")
         strategy_params = request_dict.get("strategy_params", {})
 
         strategy = get_strategy(strategy_code, strategy_params)

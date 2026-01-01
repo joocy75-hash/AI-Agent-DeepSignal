@@ -9,12 +9,10 @@ import {
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
-import axios from 'axios';
+import apiClient from '../../api/client';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function UrgentAlerts() {
     const [alerts, setAlerts] = useState([]);
@@ -28,17 +26,7 @@ export default function UrgentAlerts() {
 
     const loadAlerts = async () => {
         try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                setLoading(false);
-                return;
-            }
-
-            const headers = {
-                'Authorization': `Bearer ${token}`,
-            };
-
-            const response = await axios.get(`${API_BASE_URL}/alerts/urgent`, { headers });
+            const response = await apiClient.get('/alerts/urgent');
             setAlerts(response.data.alerts || []);
             setLoading(false);
         } catch (error) {

@@ -188,6 +188,48 @@ class BotIsolationManager:
             )
             return position.id
 
+    async def update_position(
+        self,
+        user_id: int,
+        bot_instance_id: int,
+        symbol: str,
+        size: float,
+        entry_price: float,
+        session: AsyncSession
+    ):
+        """
+        포지션 업데이트 (추매 시)
+
+        Args:
+            user_id: 사용자 ID
+            bot_instance_id: 봇 인스턴스 ID
+            symbol: 거래 심볼
+            size: 업데이트된 포지션 크기
+            entry_price: 업데이트된 평균 진입가
+            session: DB 세션
+        """
+        lock = await self._get_lock(user_id, symbol)
+
+        async with lock:
+            if bot_instance_id in self._bot_positions:
+                self._bot_positions[bot_instance_id]["size"] = size
+                self._bot_positions[bot_instance_id]["entry_price"] = entry_price
+
+            result = await session.execute(
+                select(Position).where(
+                    and_(
+                        Position.user_id == user_id,
+                        Position.bot_instance_id == bot_instance_id,
+                        Position.symbol == symbol
+                    )
+                )
+            )
+            position = result.scalar_one_or_none()
+            if position:
+                position.size = size
+                position.entry_price = Decimal(str(entry_price))
+                await session.commit()
+
     async def close_position(
         self,
         user_id: int,

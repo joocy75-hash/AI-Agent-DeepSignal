@@ -33,31 +33,22 @@ const coinColors = {
     'JUP': '#00C2A8', 'APT': '#000000', 'FTM': '#1969FF', 'NEAR': '#000000'
 };
 
-// 코인 아이콘 컴포넌트
-const CoinIcon = memo(({ symbol }) => {
-    const [imgSrc, setImgSrc] = useState(null);
+const iconSourcesFor = (coinValue) => ([
+    `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${coinValue}.png`,
+    `https://assets.coincap.io/assets/icons/${coinValue}@2x.png`,
+    `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/${coinValue}.png`,
+]);
+
+const CoinIconInner = ({ coin, coinUpper }) => {
+    const sources = iconSourcesFor(coin);
     const [loadAttempt, setLoadAttempt] = useState(0);
-    const coin = symbol?.replace('USDT', '').replace('_UMCBL', '').toLowerCase();
-    const coinUpper = coin?.toUpperCase();
-
-    const iconSources = [
-        `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${coin}.png`,
-        `https://assets.coincap.io/assets/icons/${coin}@2x.png`,
-        `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/${coin}.png`,
-    ];
-
-    useEffect(() => {
-        setLoadAttempt(0);
-        if (iconSources.length > 0) {
-            setImgSrc(iconSources[0]);
-        }
-    }, [coin]);
+    const [imgSrc, setImgSrc] = useState(sources[0] || null);
 
     const handleError = () => {
         const nextAttempt = loadAttempt + 1;
-        if (nextAttempt < iconSources.length) {
+        if (nextAttempt < sources.length) {
             setLoadAttempt(nextAttempt);
-            setImgSrc(iconSources[nextAttempt]);
+            setImgSrc(sources[nextAttempt]);
         } else {
             setImgSrc(null);
         }
@@ -98,6 +89,13 @@ const CoinIcon = memo(({ symbol }) => {
             onError={handleError}
         />
     );
+};
+
+// 코인 아이콘 컴포넌트
+const CoinIcon = memo(({ symbol }) => {
+    const coin = symbol?.replace('USDT', '').replace('_UMCBL', '').toLowerCase();
+    const coinUpper = coin?.toUpperCase();
+    return <CoinIconInner key={coin} coin={coin} coinUpper={coinUpper} />;
 });
 
 CoinIcon.displayName = 'CoinIcon';
@@ -109,45 +107,13 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
     const [closingPositionId, setClosingPositionId] = useState(null);
     const [panicClosing, setPanicClosing] = useState(false);
     const [useBitget, setUseBitget] = useState(true);
-    const [localPrices, setLocalPrices] = useState({});
     const [selectedPosition, setSelectedPosition] = useState(null);
     const [detailModalOpen, setDetailModalOpen] = useState(false);
     const { subscribe, isConnected } = useWebSocket();
 
     const prevPositionsRef = useRef(null);
     const isLoadingRef = useRef(false); // 중복 로딩 방지
-    const currentPrices = { ...localPrices, ...propCurrentPrices };
-
-    const fetchCurrentPrices = useCallback(async (symbols) => {
-        if (!symbols || symbols.length === 0) return;
-
-        const uniqueSymbols = [...new Set(symbols)];
-        const priceUpdates = {};
-
-        await Promise.all(
-            uniqueSymbols.map(async (symbol) => {
-                try {
-                    const ticker = await bitgetAPI.getTicker(symbol);
-                    if (ticker && ticker.last) {
-                        priceUpdates[symbol] = parseFloat(ticker.last);
-                    }
-                } catch (err) {
-                    // 조용히 실패 처리
-                }
-            })
-        );
-
-        if (Object.keys(priceUpdates).length > 0) {
-            setLocalPrices(prev => {
-                const newPrices = { ...prev, ...priceUpdates };
-                // 변경이 없으면 업데이트 하지 않음
-                if (JSON.stringify(prev) === JSON.stringify(newPrices)) {
-                    return prev;
-                }
-                return newPrices;
-            });
-        }
-    }, []);
+    const currentPrices = { ...propCurrentPrices };
 
     const loadPositions = useCallback(async (showLoading = false, forceRefresh = false) => {
         // 중복 로딩 방지
@@ -268,7 +234,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
     // 초기 로딩
     useEffect(() => {
         loadPositions(true, true);
-    }, []);
+    }, [loadPositions]);
 
     // 자동 새로고침 (별도 useEffect로 분리하여 의존성 문제 해결)
     useEffect(() => {
@@ -421,7 +387,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
                                 await orderAPI.closePosition(position.id, position.symbol, position.side);
                             }
                             successCount++;
-                        } catch (err) {
+                        } catch {
                             failCount++;
                         }
                     });
@@ -443,7 +409,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
                     if (onPositionClosed) {
                         onPositionClosed({ panic_close: true, success: successCount, failed: failCount });
                     }
-                } catch (err) {
+                } catch {
                     Modal.error({ title: '긴급 청산 중 오류가 발생했습니다.' });
                 } finally {
                     setPanicClosing(false);
@@ -469,7 +435,7 @@ function PositionList({ currentPrices: propCurrentPrices = {}, onPositionClosed 
                             await loadPositions(true, true);
                             if (onPositionClosed) onPositionClosed(result);
                             return;
-                        } catch (bitgetError) {
+                        } catch {
                             // fallback
                         }
                     }

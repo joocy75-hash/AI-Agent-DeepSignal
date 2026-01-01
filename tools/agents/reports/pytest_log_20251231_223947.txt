@@ -1,0 +1,4 @@
+ImportError while loading conftest '/Users/mr.joo/Desktop/auto-dashboard/backend/tests/conftest.py'.
+backend/tests/conftest.py:10: in <module>
+    from sqlalchemy import create_engine
+E   ModuleNotFoundError: No module named 'sqlalchemy'

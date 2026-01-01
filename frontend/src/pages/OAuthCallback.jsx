@@ -8,16 +8,16 @@ const { Text } = Typography;
 /**
  * OAuth 콜백 페이지
  * 소셜 로그인 완료 후 백엔드에서 이 페이지로 리다이렉트됩니다.
- * URL 파라미터에서 토큰을 추출하여 저장하고 대시보드로 이동합니다.
+ * 백엔드에서 설정한 쿠키를 기반으로 로그인 상태를 확인합니다.
  */
 export default function OAuthCallback() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('');
+    const apiBase = import.meta.env.VITE_API_URL || '';
 
     useEffect(() => {
-        const token = searchParams.get('token');
         const provider = searchParams.get('provider');
         const error = searchParams.get('error');
 
@@ -41,44 +41,27 @@ export default function OAuthCallback() {
             return;
         }
 
-        if (token) {
-            // 토큰 저장
-            localStorage.setItem('token', token);
-
-            // 토큰에서 사용자 정보 추출
+        const verifyLogin = async () => {
             try {
-                const base64Url = token.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const jsonPayload = decodeURIComponent(
-                    atob(base64)
-                        .split('')
-                        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                        .join('')
-                );
-                const payload = JSON.parse(jsonPayload);
-
-                localStorage.setItem('userEmail', payload.email);
-                localStorage.setItem('userId', payload.user_id);
-                localStorage.setItem('userRole', payload.role || 'user');
+                const response = await fetch(`${apiBase}/api/v1/auth/me`, { credentials: 'include' });
+                if (!response.ok) {
+                    throw new Error('Auth check failed');
+                }
+                setStatus('success');
+                setMessage(`${provider === 'google' ? 'Google' : '카카오'} 로그인 성공!`);
+                setTimeout(() => {
+                    navigate('/dashboard');
+                }, 1000);
             } catch (e) {
-                console.error('Failed to decode token:', e);
+                setStatus('error');
+                setMessage('인증 정보를 받지 못했습니다.');
+                setTimeout(() => {
+                    navigate('/login');
+                }, 3000);
             }
+        };
 
-            setStatus('success');
-            setMessage(`${provider === 'google' ? 'Google' : '카카오'} 로그인 성공!`);
-
-            // 1초 후 대시보드로 이동
-            setTimeout(() => {
-                navigate('/dashboard');
-            }, 1000);
-        } else {
-            setStatus('error');
-            setMessage('인증 정보를 받지 못했습니다.');
-
-            setTimeout(() => {
-                navigate('/login');
-            }, 3000);
-        }
+        verifyLogin();
     }, [searchParams, navigate]);
 
     return (

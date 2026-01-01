@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Table, Tag } from 'antd';
 import { HistoryOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import apiClient from '../../api/client';
 
 export default function RecentTrades() {
     const [trades, setTrades] = useState([]);
@@ -18,17 +16,7 @@ export default function RecentTrades() {
 
     const loadTrades = async () => {
         try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                setLoading(false);
-                return;
-            }
-
-            const headers = {
-                'Authorization': `Bearer ${token}`,
-            };
-
-            const response = await axios.get(`${API_BASE_URL}/trades/recent-trades?limit=5`, { headers });
+            const response = await apiClient.get('/trades/recent-trades', { params: { limit: 5 } });
 
             // API 응답 데이터 매핑
             const tradesData = response.data.trades || [];

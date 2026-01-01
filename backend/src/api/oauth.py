@@ -4,6 +4,7 @@ OAuth (Google, Kakao) 소셜 로그인 API
 
 import httpx
 import secrets
+import time
 from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -14,6 +15,7 @@ from ..database.db import get_session
 from ..database.models import User
 from ..config import settings
 from ..utils.jwt_auth import JWTAuth
+from ..utils.auth_cookies import set_auth_cookies
 from ..utils.structured_logging import get_logger
 
 router = APIRouter(prefix="/auth", tags=["oauth"])
@@ -21,6 +23,17 @@ logger = get_logger(__name__)
 
 # OAuth 상태 저장소 (실제 환경에서는 Redis 사용 권장)
 oauth_states: dict = {}
+OAUTH_STATE_TTL_SECONDS = 600
+
+
+def _cleanup_oauth_states(now: float) -> None:
+    expired = [
+        state
+        for state, data in oauth_states.items()
+        if now - data.get("created_at", 0) > OAUTH_STATE_TTL_SECONDS
+    ]
+    for state in expired:
+        oauth_states.pop(state, None)
 
 
 # ===== Google OAuth =====
@@ -40,7 +53,9 @@ async def google_login():
 
     # CSRF 방지를 위한 state 생성
     state = secrets.token_urlsafe(32)
-    oauth_states[state] = {"provider": "google"}
+    now = time.time()
+    _cleanup_oauth_states(now)
+    oauth_states[state] = {"provider": "google", "created_at": now}
 
     params = {
         "client_id": settings.google_client_id,
@@ -72,8 +87,14 @@ async def google_callback(
         return RedirectResponse(url=f"{frontend_url}/login?error=google_auth_failed")
 
     # State 검증
+    now = time.time()
+    _cleanup_oauth_states(now)
     if not state or state not in oauth_states:
         return RedirectResponse(url=f"{frontend_url}/login?error=invalid_state")
+
+    if now - oauth_states[state].get("created_at", 0) > OAUTH_STATE_TTL_SECONDS:
+        del oauth_states[state]
+        return RedirectResponse(url=f"{frontend_url}/login?error=state_expired")
 
     del oauth_states[state]  # 일회용 state 삭제
 
@@ -160,17 +181,17 @@ async def google_callback(
         await session.commit()
         await session.refresh(user)
 
-        # JWT 토큰 생성
-        token = JWTAuth.create_access_token(
-            data={"user_id": user.id, "email": user.email, "role": user.role or "user"}
-        )
+        # JWT 토큰 생성 및 쿠키 설정
+        user_data = {"user_id": user.id, "email": user.email, "role": user.role or "user"}
+        access_token = JWTAuth.create_access_token(data=user_data)
+        refresh_token = JWTAuth.create_refresh_token(data=user_data)
 
         logger.info("google_login_success", f"User {user.email} logged in via Google")
 
         # 프론트엔드로 토큰과 함께 리다이렉트
-        return RedirectResponse(
-            url=f"{frontend_url}/oauth/callback?token={token}&provider=google"
-        )
+        response = RedirectResponse(url=f"{frontend_url}/oauth/callback?provider=google")
+        set_auth_cookies(response, access_token, refresh_token)
+        return response
 
     except Exception as e:
         logger.error("google_oauth_exception", f"Exception: {str(e)}")
@@ -192,7 +213,9 @@ async def kakao_login():
 
     # CSRF 방지를 위한 state 생성
     state = secrets.token_urlsafe(32)
-    oauth_states[state] = {"provider": "kakao"}
+    now = time.time()
+    _cleanup_oauth_states(now)
+    oauth_states[state] = {"provider": "kakao", "created_at": now}
 
     params = {
         "client_id": settings.kakao_client_id,
@@ -222,8 +245,14 @@ async def kakao_callback(
         return RedirectResponse(url=f"{frontend_url}/login?error=kakao_auth_failed")
 
     # State 검증
+    now = time.time()
+    _cleanup_oauth_states(now)
     if not state or state not in oauth_states:
         return RedirectResponse(url=f"{frontend_url}/login?error=invalid_state")
+
+    if now - oauth_states[state].get("created_at", 0) > OAUTH_STATE_TTL_SECONDS:
+        del oauth_states[state]
+        return RedirectResponse(url=f"{frontend_url}/login?error=state_expired")
 
     del oauth_states[state]  # 일회용 state 삭제
 
@@ -318,17 +347,17 @@ async def kakao_callback(
         await session.commit()
         await session.refresh(user)
 
-        # JWT 토큰 생성
-        token = JWTAuth.create_access_token(
-            data={"user_id": user.id, "email": user.email, "role": user.role or "user"}
-        )
+        # JWT 토큰 생성 및 쿠키 설정
+        user_data = {"user_id": user.id, "email": user.email, "role": user.role or "user"}
+        access_token = JWTAuth.create_access_token(data=user_data)
+        refresh_token = JWTAuth.create_refresh_token(data=user_data)
 
         logger.info("kakao_login_success", f"User {user.email} logged in via Kakao")
 
         # 프론트엔드로 토큰과 함께 리다이렉트
-        return RedirectResponse(
-            url=f"{frontend_url}/oauth/callback?token={token}&provider=kakao"
-        )
+        response = RedirectResponse(url=f"{frontend_url}/oauth/callback?provider=kakao")
+        set_auth_cookies(response, access_token, refresh_token)
+        return response
 
     except Exception as e:
         logger.error("kakao_oauth_exception", f"Exception: {str(e)}")

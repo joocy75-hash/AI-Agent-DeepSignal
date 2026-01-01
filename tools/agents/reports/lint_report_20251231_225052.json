@@ -1,0 +1,10 @@
+{
+  "status": "failed",
+  "command": "compileall + ruff + black",
+  "log": "tools/agents/reports/lint_log_20251231_225052.txt",
+  "details": {
+    "compileall": "failed",
+    "ruff": "ok",
+    "black": "ok"
+  }
+}

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from ..config import settings
@@ -16,8 +16,8 @@ from ..config import settings
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# HTTP Bearer token
-security = HTTPBearer()
+# HTTP Bearer token (optional by default, required endpoints must validate)
+security = HTTPBearer(auto_error=False)
 
 
 class JWTAuth:
@@ -152,6 +152,16 @@ class JWTAuth:
             )
 
     @staticmethod
+    def verify_token(token: str) -> dict:
+        """
+        JWT 토큰 검증 (Rate Limiter 등에서 사용)
+
+        Raises:
+            HTTPException: 토큰이 유효하지 않은 경우
+        """
+        return JWTAuth.decode_token(token)
+
+    @staticmethod
     def decode_refresh_token(token: str) -> dict:
         """
         Refresh Token 디코딩 및 검증
@@ -243,8 +253,18 @@ class TokenData:
         self.email = email
 
 
+def _extract_token(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials],
+) -> Optional[str]:
+    if credentials is not None:
+        return credentials.credentials
+    return request.cookies.get("access_token")
+
+
 def get_current_user_id(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> int:
     """
     JWT 토큰에서 현재 사용자 ID 추출
@@ -263,7 +283,13 @@ def get_current_user_id(
     Raises:
         HTTPException: 토큰이 유효하지 않거나 user_id가 없는 경우
     """
-    token = credentials.credentials
+    token = _extract_token(request, credentials)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     payload = JWTAuth.decode_token(token)
 
     user_id: Optional[int] = payload.get("user_id")
@@ -278,7 +304,8 @@ def get_current_user_id(
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> TokenData:
     """
     JWT 토큰에서 현재 사용자 정보 추출 (전체)
@@ -300,7 +327,13 @@ def get_current_user(
     Raises:
         HTTPException: 토큰이 유효하지 않거나 필수 정보가 없는 경우
     """
-    token = credentials.credentials
+    token = _extract_token(request, credentials)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     payload = JWTAuth.decode_token(token)
 
     user_id: Optional[int] = payload.get("user_id")
@@ -318,6 +351,7 @@ def get_current_user(
 
 # Optional: 선택적 인증 (토큰이 있으면 검증, 없어도 OK)
 def get_current_user_optional(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Optional[int]:
     """
@@ -331,10 +365,7 @@ def get_current_user_optional(
             else:
                 # 비로그인 사용자용 응답
     """
-    if credentials is None:
-        return None
-
     try:
-        return get_current_user_id(credentials)
+        return get_current_user_id(request, credentials)
     except HTTPException:
         return None

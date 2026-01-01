@@ -7,7 +7,7 @@ import aiofiles
 from ..config import BacktestConfig
 from .backtest_trade_recorder import BacktestTradeRecorder
 from .backtest_metrics import BacktestMetricsCalculator
-from .strategies.simple_open_close import SimpleOpenCloseStrategy
+from .strategies.eth_ai_fusion import EthAIFusionBacktestStrategy
 
 
 class BacktestEngine:
@@ -33,7 +33,7 @@ class BacktestEngine:
     """
 
     def __init__(self, strategy=None):
-        self.strategy = strategy or SimpleOpenCloseStrategy()
+        self.strategy = strategy or EthAIFusionBacktestStrategy()
 
     async def load_candles(self, path: str):
         """

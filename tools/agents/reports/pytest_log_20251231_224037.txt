@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.7, pytest-9.0.2, pluggy-1.6.0
+rootdir: /Users/mr.joo/Desktop/auto-dashboard
+plugins: anyio-4.12.0
+collected 4 items
+
+tools/tests/test_ci_agent.py ..                                          [ 50%]
+tools/tests/test_dev_assistant.py .                                      [ 75%]
+tools/tests/test_ops_agent.py .                                          [100%]
+
+============================== 4 passed in 0.39s ===============================

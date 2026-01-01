@@ -15,14 +15,13 @@ export const useWebSocket = (userId) => {
     const subscribedChannelsRef = useRef(new Set());
 
     const connect = useCallback(() => {
-        const token = localStorage.getItem('token');
-        if (!token || !userId) {
-            console.log('[WebSocket] No token or userId, skipping connection');
+        if (!userId) {
+            console.log('[WebSocket] No userId, skipping connection');
             return;
         }
 
         try {
-            const ws = new WebSocket(`${WS_URL}/ws/user/${userId}?token=${token}`);
+            const ws = new WebSocket(`${WS_URL}/ws/user/${userId}`);
 
             ws.onopen = () => {
                 console.log('[WebSocket] Connected');

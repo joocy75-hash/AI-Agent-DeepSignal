@@ -50,7 +50,7 @@ const snapshotCache = {
    * Retrieve cached snapshot
    * @returns {Object|null} Cached snapshot or null if not found/invalid
    */
-  get() {
+  get(userId) {
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (!cached) {
@@ -67,8 +67,7 @@ const snapshotCache = {
       }
 
       // UserId check (validate against current user)
-      const currentUserId = localStorage.getItem('userId');
-      if (currentUserId && snapshot.userId !== currentUserId) {
+      if (userId && snapshot.userId !== String(userId)) {
         console.log('[SnapshotCache] UserId mismatch, clearing cache');
         this.clear();
         return null;
@@ -91,14 +90,12 @@ const snapshotCache = {
    * Save snapshot to cache
    * @param {Object} snapshot - Dashboard snapshot data
    */
-  set(snapshot) {
+  set(snapshot, userId) {
     try {
-      const currentUserId = localStorage.getItem('userId');
-
       const cacheData = {
         version: CACHE_VERSION,
         updatedAt: Date.now(),
-        userId: currentUserId || 'unknown',
+        userId: userId ? String(userId) : 'unknown',
         tradeStats: snapshot.tradeStats || {},
         periodProfits: snapshot.periodProfits || {},
         botStatus: snapshot.botStatus || {},
@@ -119,7 +116,7 @@ const snapshotCache = {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             version: CACHE_VERSION,
             updatedAt: Date.now(),
-            userId: localStorage.getItem('userId') || 'unknown',
+            userId: userId ? String(userId) : 'unknown',
             ...snapshot
           }));
         } catch (retryError) {
@@ -166,7 +163,7 @@ const snapshotCache = {
    * Check if cache exists
    * @returns {boolean} True if valid cache exists
    */
-  exists() {
+  exists(userId) {
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (!cached) {
@@ -181,8 +178,7 @@ const snapshotCache = {
       }
 
       // Must match current userId
-      const currentUserId = localStorage.getItem('userId');
-      if (currentUserId && snapshot.userId !== currentUserId) {
+      if (userId && snapshot.userId !== String(userId)) {
         return false;
       }
 

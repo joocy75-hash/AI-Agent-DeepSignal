@@ -20,7 +20,7 @@ const PING_INTERVAL = 30000; // 30초마다 ping
 const CONNECTION_TIMEOUT = 10000; // 연결 타임아웃 10초
 
 export function WebSocketProvider({ children }) {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [connectionState, setConnectionState] = useState('disconnected'); // 'connecting', 'connected', 'disconnected', 'reconnecting', 'failed'
   const [lastMessage, setLastMessage] = useState(null);
@@ -63,8 +63,8 @@ export function WebSocketProvider({ children }) {
 
   // Connect to WebSocket
   const connect = useCallback((isManualReconnect = false) => {
-    if (!user || !token) {
-      console.log('[WS] No user or token, skipping connection');
+    if (!user) {
+      console.log('[WS] No user, skipping connection');
       return;
     }
 
@@ -87,8 +87,8 @@ export function WebSocketProvider({ children }) {
     try {
       setConnectionState(isManualReconnect ? 'reconnecting' : 'connecting');
 
-      const wsUrl = `${WS_BASE_URL}/ws/user/${user.id}?token=${token}`;
-      console.log('[WS] Connecting to:', wsUrl.replace(token, 'TOKEN_HIDDEN'));
+      const wsUrl = `${WS_BASE_URL}/ws/user/${user.id}`;
+      console.log('[WS] Connecting to:', wsUrl);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -170,7 +170,7 @@ export function WebSocketProvider({ children }) {
         }
 
         // 자동 재연결 시도 (정상 종료가 아닐 경우)
-        if (event.code !== 1000 && user && token) {
+        if (event.code !== 1000 && user) {
           const currentRetry = retryCount + 1;
 
           if (currentRetry <= RECONNECT_CONFIG.maxRetries) {
@@ -203,7 +203,7 @@ export function WebSocketProvider({ children }) {
       console.error('[WS] Failed to connect:', error);
       setConnectionState('failed');
     }
-  }, [user, token, retryCount, calculateReconnectDelay, startCountdown]);
+  }, [user, retryCount, calculateReconnectDelay, startCountdown]);
 
   // 수동 재연결 (재시도 카운트 리셋)
   const reconnect = useCallback(() => {
@@ -298,9 +298,9 @@ export function WebSocketProvider({ children }) {
     }
   }, []);
 
-  // Connect when user and token are available
+  // Connect when user is available
   useEffect(() => {
-    if (user && token) {
+    if (user) {
       connect();
     }
 
@@ -308,12 +308,12 @@ export function WebSocketProvider({ children }) {
       disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, token]);
+  }, [user]);
 
   // 페이지 가시성 변경 시 재연결 (탭 전환 등)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user && token) {
+      if (document.visibilityState === 'visible' && user) {
         if (!isConnected && connectionState !== 'connecting' && connectionState !== 'reconnecting') {
           console.log('[WS] Page became visible, checking connection...');
           reconnect();
@@ -325,13 +325,13 @@ export function WebSocketProvider({ children }) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, token, isConnected, connectionState, reconnect]);
+  }, [user, isConnected, connectionState, reconnect]);
 
   // 온라인/오프라인 상태 감지
   useEffect(() => {
     const handleOnline = () => {
       console.log('[WS] Network online, attempting reconnect...');
-      if (user && token && !isConnected) {
+      if (user && !isConnected) {
         reconnect();
       }
     };
@@ -347,7 +347,7 @@ export function WebSocketProvider({ children }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user, token, isConnected, reconnect]);
+  }, [user, isConnected, reconnect]);
 
   // Memoize context value to prevent unnecessary re-renders of consumers
   const value = useMemo(() => ({

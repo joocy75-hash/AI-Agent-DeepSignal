@@ -114,6 +114,10 @@ class Settings(BaseModel):
     port: int = int(os.getenv("PORT", "8000"))
     # CORS 설정: 쉼표로 구분된 허용 도메인 목록 (예: "https://example.com,https://app.example.com")
     cors_origins: str = os.getenv("CORS_ORIGINS", "")
+    # Cookie settings
+    cookie_domain: str = os.getenv("COOKIE_DOMAIN", "")
+    cookie_samesite: str = os.getenv("COOKIE_SAMESITE", "lax")
+    cookie_secure: bool = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
     # Google OAuth 설정
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -163,6 +167,18 @@ class Settings(BaseModel):
                     stacklevel=2,
                 )
 
+        return self
+
+    @model_validator(mode="after")
+    def normalize_cookie_settings(self) -> "Settings":
+        """쿠키 설정 보정"""
+        environment = os.getenv("ENVIRONMENT", "development")
+        if environment == "production":
+            # 프로덕션에서는 기본적으로 Secure를 강제
+            if not self.cookie_secure:
+                self.cookie_secure = True
+            if self.cookie_samesite.lower() == "none" and not self.cookie_secure:
+                self.cookie_secure = True
         return self
 
     def is_jwt_secret_secure(self) -> bool:

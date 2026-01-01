@@ -9,15 +9,13 @@ import {
     DeleteOutlined,
     ReloadOutlined,
 } from '@ant-design/icons';
-import axios from 'axios';
+import apiClient from '../../api/client';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function AlertCenter() {
     const [alerts, setAlerts] = useState([]);
@@ -32,14 +30,9 @@ export default function AlertCenter() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-
-            const headers = { 'Authorization': `Bearer ${token}` };
-
             const [alertsRes, statsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/alerts/all`, { headers }),
-                axios.get(`${API_BASE_URL}/alerts/statistics`, { headers }),
+                apiClient.get('/alerts/all'),
+                apiClient.get('/alerts/statistics'),
             ]);
 
             let alertsData = alertsRes.data.alerts || [];
@@ -62,10 +55,7 @@ export default function AlertCenter() {
 
     const handleResolve = async (alertId) => {
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            await axios.post(`${API_BASE_URL}/alerts/resolve/${alertId}`, {}, { headers });
+            await apiClient.post(`/alerts/resolve/${alertId}`);
             loadData();
         } catch (error) {
             console.error('[AlertCenter] Error resolving alert:', error);
@@ -80,10 +70,7 @@ export default function AlertCenter() {
             cancelText: '취소',
             onOk: async () => {
                 try {
-                    const token = localStorage.getItem('token');
-                    const headers = { 'Authorization': `Bearer ${token}` };
-
-                    await axios.post(`${API_BASE_URL}/alerts/resolve-all`, {}, { headers });
+                    await apiClient.post('/alerts/resolve-all');
                     loadData();
                 } catch (error) {
                     console.error('[AlertCenter] Error resolving all alerts:', error);
@@ -101,10 +88,7 @@ export default function AlertCenter() {
             okType: 'danger',
             onOk: async () => {
                 try {
-                    const token = localStorage.getItem('token');
-                    const headers = { 'Authorization': `Bearer ${token}` };
-
-                    await axios.delete(`${API_BASE_URL}/alerts/clear-resolved`, { headers });
+                    await apiClient.delete('/alerts/clear-resolved');
                     loadData();
                 } catch (error) {
                     console.error('[AlertCenter] Error clearing resolved alerts:', error);

@@ -64,6 +64,7 @@ from .middleware.error_handler import register_exception_handlers
 from .middleware.request_context import RequestContextMiddleware
 from .middleware.admin_ip_whitelist import AdminIPWhitelistMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
+from .middleware.csrf import CSRFMiddleware
 from .config import RateLimitConfig
 
 
@@ -228,6 +229,15 @@ def create_app() -> FastAPI:
 
     # 보안 헤더 미들웨어 추가 (OWASP 권장)
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # CSRF 보호 (쿠키 기반 인증용)
+    csrf_exempt_paths = {
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/auth/google/callback",
+        "/api/v1/auth/kakao/callback",
+    }
+    app.add_middleware(CSRFMiddleware, exempt_paths=csrf_exempt_paths)
 
     # 전역 에러 핸들러 등록
     register_exception_handlers(app)

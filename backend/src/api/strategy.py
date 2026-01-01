@@ -46,21 +46,19 @@ async def create_strategy(
         if not strategy_code and payload.type:
             # type을 code로 매핑 (프론트엔드 호환성)
             type_to_code_map = {
-                # 3가지 대표 전략 (검증된 전략)
-                "proven_conservative": "proven_conservative",
-                "proven_balanced": "proven_balanced",
-                "proven_aggressive": "proven_aggressive",
-                # AI 전략
-                "autonomous_30pct": "autonomous_30pct",
-                "adaptive_market_regime_fighter": "adaptive_market_regime_fighter",
-                # 레거시 매핑 (호환성 유지)
-                "golden_cross": "ma_cross",  # 골든크로스 → MA 크로스 전략
-                "rsi_reversal": "rsi_strategy",  # RSI 반전 → RSI 전략
-                "trend_following": "ema",  # 추세추종 → EMA 전략
-                "breakout": "breakout",  # 돌파 → 돌파 전략
-                "aggressive": "ultra_aggressive",  # 공격적 → 울트라 공격적 전략
-                "ultra_aggressive": "ultra_aggressive",
-                "ma_cross": "ma_cross",
+                "eth_ai_fusion": "eth_ai_fusion",
+                "proven_conservative": "eth_ai_fusion",
+                "proven_balanced": "eth_ai_fusion",
+                "proven_aggressive": "eth_ai_fusion",
+                "autonomous_30pct": "eth_ai_fusion",
+                "adaptive_market_regime_fighter": "eth_ai_fusion",
+                "golden_cross": "eth_ai_fusion",
+                "rsi_reversal": "eth_ai_fusion",
+                "trend_following": "eth_ai_fusion",
+                "breakout": "eth_ai_fusion",
+                "aggressive": "eth_ai_fusion",
+                "ultra_aggressive": "eth_ai_fusion",
+                "ma_cross": "eth_ai_fusion",
             }
             strategy_code = type_to_code_map.get(payload.type, payload.type)
             logger.info(

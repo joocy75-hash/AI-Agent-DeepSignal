@@ -218,14 +218,13 @@ class EnhancedRateLimitMiddleware(BaseHTTPMiddleware):
             # Authorization 헤더에서 토큰 추출
             auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
 
-            if not auth_header:
+            token = None
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header[7:]  # "Bearer " 제거
+            if not token:
+                token = request.cookies.get("access_token")
+            if not token:
                 return None
-
-            # Bearer 토큰 파싱
-            if not auth_header.startswith("Bearer "):
-                return None
-
-            token = auth_header[7:]  # "Bearer " 제거
 
             # JWT 검증 및 디코딩
             payload = JWTAuth.verify_token(token)

@@ -15,15 +15,15 @@ import {
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
-import axios from 'axios';
 import useWebSocket from '../../hooks/useWebSocket';
+import apiClient from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
 export default function SystemStatus() {
+    const { user } = useAuth();
     const [data, setData] = useState({
         balance: null,
         botStatus: null,
@@ -35,7 +35,7 @@ export default function SystemStatus() {
 
     // WebSocket 연결
     const { isConnected, lastMessage, subscribe, unsubscribe } = useWebSocket(
-        localStorage.getItem('userId')
+        user?.id
     );
 
     useEffect(() => {
@@ -85,20 +85,15 @@ export default function SystemStatus() {
 
     const loadData = async () => {
         try {
-            const token = localStorage.getItem('token');
-            if (!token) {
+            if (!user?.id) {
                 setLoading(false);
                 return;
             }
 
-            const headers = {
-                'Authorization': `Bearer ${token}`,
-            };
-
             // 병렬로 API 호출
             const [botStatusRes, unrealizedPnLRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/bot/status`, { headers }),
-                axios.get(`${API_BASE_URL}/positions/unrealized-pnl`, { headers }).catch(() => null),
+                apiClient.get('/bot/status'),
+                apiClient.get('/positions/unrealized-pnl').catch(() => null),
             ]);
 
             const botStatusData = botStatusRes.data;
@@ -131,11 +126,9 @@ export default function SystemStatus() {
 
     const loadUnrealizedPnL = async () => {
         try {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+            if (!user?.id) return;
 
-            const headers = { 'Authorization': `Bearer ${token}` };
-            const response = await axios.get(`${API_BASE_URL}/positions/unrealized-pnl`, { headers });
+            const response = await apiClient.get('/positions/unrealized-pnl');
 
             setData(prev => ({
                 ...prev,

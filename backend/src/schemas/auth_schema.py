@@ -87,6 +87,18 @@ class TokenResponse(BaseModel):
     user_id: Optional[int] = None  # 2FA 검증이 필요한 경우 임시로 전달
 
 
+class UserInfo(BaseModel):
+    id: int
+    email: str
+    role: str
+
+
+class AuthResponse(BaseModel):
+    user: Optional[UserInfo] = None
+    requires_2fa: bool = False
+    user_id: Optional[int] = None
+
+
 class Login2FARequest(BaseModel):
     """2FA 로그인 완료 요청"""
 

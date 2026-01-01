@@ -1,0 +1,40 @@
+{
+  "generated_at": "2025-12-31T22:41:45.465449Z",
+  "summary": {
+    "error_top": [],
+    "warning_top": [
+      "2025-12-13 04:35:47,059 - src.middleware.error_handler - WARNING - HTTPException: 404",
+      "2025-12-13 04:35:49,706 - src.middleware.error_handler - WARNING - HTTPException: 404",
+      "2025-12-13 04:35:53,784 - src.middleware.error_handler - WARNING - HTTPException: 404",
+      "2025-12-13 04:36:00,838 - src.middleware.error_handler - WARNING - HTTPException: 404",
+      "2025-12-13 04:36:04,709 - src.middleware.error_handler - WARNING - HTTPException: 404"
+    ],
+    "order_fail_top": []
+  },
+  "classifications": {
+    "network_timeout": 0,
+    "auth_signature": 9,
+    "rate_limit": 2,
+    "order_rejected": 0,
+    "data_delay_ws": 0
+  },
+  "suggested_actions": {
+    "auth_signature": [
+      "Reload API keys",
+      "Verify API key permissions",
+      "Check server clock drift"
+    ],
+    "rate_limit": [
+      "Increase backoff",
+      "Reduce request frequency",
+      "Enable request batching"
+    ]
+  },
+  "execute_mode": false,
+  "health_check": {
+    "url": "http://localhost:8000/health",
+    "status": 200,
+    "body": "{\"status\":\"healthy\"}"
+  },
+  "guardrail": "This agent never places orders directly"
+}

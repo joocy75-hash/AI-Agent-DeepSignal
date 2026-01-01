@@ -82,7 +82,7 @@ class AdminIPWhitelistMiddleware(BaseHTTPMiddleware):
 
     def _is_admin_path(self, path: str) -> bool:
         """관리자 경로인지 확인"""
-        return path.startswith("/admin")
+        return path.startswith("/admin") or path.startswith("/api/v1/admin")
 
     def _is_ip_allowed(self, client_ip: str) -> bool:
         """IP가 허용되는지 확인"""

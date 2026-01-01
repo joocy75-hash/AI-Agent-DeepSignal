@@ -429,7 +429,7 @@ async def start_balance_monitor(user_id: int):
 
 
 @router.websocket("/ws/user/{user_id}")
-async def user_socket(websocket: WebSocket, user_id: int, token: str = Query(...)):
+async def user_socket(websocket: WebSocket, user_id: int, token: str | None = Query(None)):
     """
     WebSocket 연결 엔드포인트 (JWT 인증 필요)
 
@@ -447,7 +447,13 @@ async def user_socket(websocket: WebSocket, user_id: int, token: str = Query(...
     """
     # JWT 토큰 검증
     try:
-        payload = JWTAuth.decode_token(token)
+        token_value = token or websocket.cookies.get("access_token")
+        if not token_value:
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Missing token"
+            )
+            return
+        payload = JWTAuth.decode_token(token_value)
         token_user_id = payload.get("user_id")
 
         if token_user_id != user_id:

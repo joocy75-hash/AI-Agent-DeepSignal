@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,18 +9,23 @@ from ..schemas.auth_schema import (
     ChangePasswordRequest,
     LoginRequest,
     RegisterRequest,
-    TokenResponse,
+    AuthResponse,
+    UserInfo,
 )
 from ..utils.jwt_auth import JWTAuth, get_current_user_id
+from ..utils.auth_cookies import set_auth_cookies, clear_auth_cookies, REFRESH_COOKIE
 from ..utils.auth_dependencies import require_admin
 from ..utils.exceptions import DuplicateResourceError, AuthenticationError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=TokenResponse)
+
+@router.post("/register", response_model=AuthResponse)
 async def register(
-    payload: RegisterRequest, session: AsyncSession = Depends(get_session)
+    payload: RegisterRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
 ):
     """사용자 회원가입 및 JWT 토큰 발급
 
@@ -49,15 +54,25 @@ async def register(
     await session.refresh(user)
 
     # JWT 토큰 생성 (user_id + email + role 포함)
-    token = JWTAuth.create_access_token(
+    access_token = JWTAuth.create_access_token(
         data={"user_id": user.id, "email": user.email, "role": user.role or "user"}
     )
+    refresh_token = JWTAuth.create_refresh_token(
+        data={"user_id": user.id, "email": user.email, "role": user.role or "user"}
+    )
+    set_auth_cookies(response, access_token, refresh_token)
 
-    return TokenResponse(access_token=token, token_type="bearer")
+    return AuthResponse(
+        user=UserInfo(id=user.id, email=user.email, role=user.role or "user")
+    )
 
 
-@router.post("/login")
-async def login(payload: LoginRequest, session: AsyncSession = Depends(get_session)):
+@router.post("/login", response_model=AuthResponse)
+async def login(
+    payload: LoginRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+):
     """
     사용자 로그인 및 JWT 토큰 발급
 
@@ -129,12 +144,7 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
     if user.is_2fa_enabled:
         # 2FA 코드가 제출되지 않은 경우
         if not payload.totp_code:
-            return {
-                "access_token": "",
-                "token_type": "bearer",
-                "requires_2fa": True,
-                "user_id": user.id,
-            }
+            return AuthResponse(requires_2fa=True, user_id=user.id)
 
         # 2FA 코드 검증
         secret = totp_service.decrypt_secret(user.totp_secret)
@@ -151,12 +161,11 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
 
     access_token = JWTAuth.create_access_token(data=user_data)
     refresh_token = JWTAuth.create_refresh_token(data=user_data)
+    set_auth_cookies(response, access_token, refresh_token)
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-    }
+    return AuthResponse(
+        user=UserInfo(id=user.id, email=user.email, role=user.role or "user")
+    )
 
 
 @router.get("/users")
@@ -228,11 +237,15 @@ async def change_password(
 class RefreshTokenRequest(BaseModel):
     """Refresh Token 요청"""
 
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 @router.post("/refresh")
-async def refresh_token(payload: RefreshTokenRequest):
+async def refresh_token(
+    response: Response,
+    request: Request,
+    payload: RefreshTokenRequest | None = None,
+):
     """
     Refresh Token을 사용하여 새 Access Token 발급
 
@@ -250,15 +263,34 @@ async def refresh_token(payload: RefreshTokenRequest):
         token_type: "bearer"
     """
     try:
-        new_access, new_refresh = JWTAuth.refresh_access_token(payload.refresh_token)
+        refresh_token_value = (payload.refresh_token if payload else None) or request.cookies.get(REFRESH_COOKIE)
+        if not refresh_token_value:
+            raise AuthenticationError("Refresh token missing")
+        new_access, new_refresh = JWTAuth.refresh_access_token(refresh_token_value)
 
-        response = {"access_token": new_access, "token_type": "bearer"}
+        response_payload = {"ok": True}
 
         # Refresh Token이 갱신된 경우에만 포함
         if new_refresh:
-            response["refresh_token"] = new_refresh
+            refresh_token_value = new_refresh
+        set_auth_cookies(response, new_access, refresh_token_value)
 
-        return response
+        return response_payload
 
     except Exception as e:
         raise AuthenticationError(f"토큰 갱신 실패: {str(e)}")
+
+
+@router.get("/me")
+async def get_me(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise AuthenticationError("사용자를 찾을 수 없습니다")
+    return {"id": user.id, "email": user.email, "role": user.role or "user"}
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    clear_auth_cookies(response)
+    return {"ok": True}

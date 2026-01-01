@@ -1,0 +1,5 @@
+{
+  "status": "failed",
+  "command": "python -m pytest backend/tests/agents",
+  "log": "tools/agents/reports/pytest_log_20251231_223947.txt"
+}

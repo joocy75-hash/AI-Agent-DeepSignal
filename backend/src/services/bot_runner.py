@@ -93,7 +93,7 @@ class BotRunner:
             name="Main Market Regime Analyzer",
             config={
                 "symbol": "BTCUSDT",
-                "timeframe": "1h",
+                "timeframe": "5m",
                 "candle_limit": 200
             },
             bitget_client=None,  # 실행 시점에 설정
@@ -606,7 +606,7 @@ class BotRunner:
                 try:
                     # 전략 파라미터에서 타임프레임 가져오기
                     strategy_params = json.loads(strategy.params) if strategy and strategy.params else {}
-                    timeframe = strategy_params.get("timeframe", "1h")
+                    timeframe = strategy_params.get("timeframe", "5m")
 
                     historical = await bitget_client.get_historical_candles(
                         symbol=symbol, interval=timeframe, limit=200
@@ -803,11 +803,13 @@ class BotRunner:
                                 signal_action = signal_result.get("action", "hold")
                                 signal_confidence = signal_result.get("confidence", 0)
                                 signal_reason = signal_result.get("reason", "")
+                                signal_size_from_strategy = signal_result.get("size", None)
                             except Exception as e:
                                 logger.error(f"Strategy error for bot {bot_instance_id}: {e}")
                                 signal_action = "hold"
                                 signal_confidence = 0
                                 signal_reason = ""
+                                signal_size_from_strategy = None
                         else:
                             signal_action = "hold"
                             signal_confidence = 0
@@ -948,6 +950,94 @@ class BotRunner:
                                 current_position, price, signal_reason
                             )
                             current_position = None
+
+                        elif signal_action in {"buy", "sell"} and current_position:
+                            position_side = current_position.get("side", "long")
+                            same_direction = (
+                                (position_side == "long" and signal_action == "buy")
+                                or (position_side == "short" and signal_action == "sell")
+                            )
+                            if not same_direction:
+                                continue
+
+                            leverage = current_position.get("leverage", bot_instance.max_leverage)
+                            add_size = (
+                                float(signal_size_from_strategy)
+                                if signal_size_from_strategy
+                                else float(current_position.get("size", 0)) * 0.35
+                            )
+                            min_sizes = {
+                                "BTCUSDT": 0.001,
+                                "ETHUSDT": 0.01,
+                                "SOLUSDT": 0.1,
+                                "BNBUSDT": 0.01,
+                                "ADAUSDT": 10.0,
+                            }
+                            min_size = min_sizes.get(symbol, 0.1)
+                            if add_size < min_size:
+                                add_size = min_size
+
+                            add_position_value = (add_size * price) / leverage if leverage else 0
+                            available = await allocation_manager.get_available_balance(
+                                user_id, bot_instance_id, bitget_client, session
+                            )
+                            if available < 10 or available < add_position_value:
+                                continue
+
+                            can_order, msg = await allocation_manager.request_order_amount(
+                                user_id, bot_instance_id, add_position_value, bitget_client, session
+                            )
+                            if not can_order:
+                                continue
+
+                            try:
+                                await bitget_client.set_leverage(
+                                    symbol=symbol, leverage=leverage, margin_coin="USDT"
+                                )
+                                order_side = OrderSide.BUY if signal_action == "buy" else OrderSide.SELL
+                                await bitget_client.place_market_order(
+                                    symbol=symbol,
+                                    side=order_side,
+                                    size=add_size,
+                                    margin_coin="USDT",
+                                    reduce_only=False,
+                                )
+
+                                old_size = float(current_position.get("size", 0))
+                                new_size = old_size + add_size
+                                if new_size > 0:
+                                    new_entry = (
+                                        (current_position.get("entry_price", price) * old_size)
+                                        + (price * add_size)
+                                    ) / new_size
+                                    current_position["entry_price"] = new_entry
+                                current_position["size"] = new_size
+                                current_position["position_value"] = current_position.get(
+                                    "position_value", 0
+                                ) + add_position_value
+
+                                await bot_isolation_manager.update_position(
+                                    user_id,
+                                    bot_instance_id,
+                                    symbol,
+                                    new_size,
+                                    current_position.get("entry_price", price),
+                                    session,
+                                )
+
+                                if current_position.get("trade_id"):
+                                    result = await session.execute(
+                                        select(Trade).where(Trade.id == current_position["trade_id"])
+                                    )
+                                    trade = result.scalar_one_or_none()
+                                    if trade:
+                                        trade.qty = Decimal(str(new_size))
+                                        trade.entry_price = Decimal(str(current_position.get("entry_price", price)))
+                                        await session.commit()
+
+                            except Exception:
+                                allocation_manager.release_order_amount(bot_instance_id, add_position_value)
+                                continue
 
                         # 신규 포지션 진입
                         elif signal_action in {"buy", "sell"} and not current_position:
@@ -1542,10 +1632,10 @@ class BotRunner:
                 # 2.5. MarketRegimeAgent에 Bitget 클라이언트 설정 (캔들 데이터 조회용)
                 # 전략 파라미터에서 심볼과 타임프레임 미리 가져오기
                 strategy_params = json.loads(strategy.params) if strategy.params else {}
-                symbol = strategy_params.get("symbol", "BTC/USDT").replace(
+                symbol = strategy_params.get("symbol", "ETH/USDT").replace(
                     "/", ""
-                )  # "BTCUSDT"
-                timeframe = strategy_params.get("timeframe", "1h")
+                )  # "ETHUSDT"
+                timeframe = strategy_params.get("timeframe", "5m")
 
                 if self.market_regime.bitget_client is None:
                     self.market_regime.bitget_client = bitget_client
@@ -1971,6 +2061,70 @@ class BotRunner:
                                         "message": f"CLOSE_ERROR: {str(e)}",
                                     },
                                 )
+
+                        elif signal_action in {"buy", "sell"} and current_position:
+                            position_side = current_position.get("side", "long")
+                            same_direction = (
+                                (position_side == "long" and signal_action == "buy")
+                                or (position_side == "short" and signal_action == "sell")
+                            )
+                            if not same_direction:
+                                continue
+
+                            leverage = current_position.get("leverage", 10)
+                            add_size = (
+                                float(signal_size_from_strategy)
+                                if signal_size_from_strategy
+                                else float(current_position.get("size", 0)) * 0.35
+                            )
+                            min_sizes = {
+                                "BTCUSDT": 0.001,
+                                "ETHUSDT": 0.01,
+                                "SOLUSDT": 0.1,
+                                "BNBUSDT": 0.01,
+                                "ADAUSDT": 10.0,
+                            }
+                            min_size = min_sizes.get(symbol, 0.1)
+                            if add_size < min_size:
+                                add_size = min_size
+
+                            try:
+                                await bitget_client.set_leverage(
+                                    symbol=symbol,
+                                    leverage=leverage,
+                                    margin_coin="USDT",
+                                )
+                                order_side = OrderSide.BUY if signal_action == "buy" else OrderSide.SELL
+                                await bitget_client.place_market_order(
+                                    symbol=symbol,
+                                    side=order_side,
+                                    size=add_size,
+                                    margin_coin="USDT",
+                                    reduce_only=False,
+                                )
+
+                                old_size = float(current_position.get("size", 0))
+                                new_size = old_size + add_size
+                                if new_size > 0:
+                                    new_entry = (
+                                        (current_position.get("entry_price", price) * old_size)
+                                        + (price * add_size)
+                                    ) / new_size
+                                    current_position["entry_price"] = new_entry
+                                current_position["size"] = new_size
+
+                                if current_position.get("trade_id"):
+                                    result = await session.execute(
+                                        select(Trade).where(Trade.id == current_position["trade_id"])
+                                    )
+                                    trade = result.scalar_one_or_none()
+                                    if trade:
+                                        trade.qty = Decimal(str(new_size))
+                                        trade.entry_price = Decimal(str(current_position.get("entry_price", price)))
+                                        await session.commit()
+
+                            except Exception:
+                                continue
 
                         # 새로운 포지션 진입
                         elif signal_action in {"buy", "sell"} and not current_position:
@@ -2626,7 +2780,7 @@ class BotRunner:
             try:
                 # MarketRegimeAgent에 설정된 심볼과 타임프레임 사용
                 symbol = self.market_regime.symbol or "BTCUSDT"
-                timeframe = self.market_regime.timeframe or "1h"
+                timeframe = self.market_regime.timeframe or "5m"
 
                 # 시장 환경 분석 태스크 생성
                 # Note: bitget_client가 MarketRegimeAgent에 설정되어 있으면

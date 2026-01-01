@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import snapshotCache from '../services/snapshotCache';
 import { analyticsAPI } from '../api/analytics';
 import { botAPI } from '../api/bot';
@@ -17,9 +18,10 @@ const CACHE_TTL = 30000;
  * - hasData determines skeleton visibility, NOT isRefreshing
  */
 export default function useDashboardData() {
+  const { user } = useAuth();
   // Initialize state synchronously from cache
-  const cachedData = snapshotCache.get();
-  const cacheExists = snapshotCache.exists();
+  const cachedData = snapshotCache.get(user?.id);
+  const cacheExists = snapshotCache.exists(user?.id);
 
   const [tradeStats, setTradeStats] = useState(cachedData?.tradeStats || null);
   const [periodProfits, setPeriodProfits] = useState(cachedData?.periodProfits || null);
@@ -102,7 +104,7 @@ export default function useDashboardData() {
         botStatus: newBotStatus,
         recentTrades: newRecentTrades,
         timestamp,
-      });
+      }, user?.id);
 
       setLastUpdated(timestamp);
       setHasData(true);

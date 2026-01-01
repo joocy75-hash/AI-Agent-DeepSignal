@@ -312,13 +312,11 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const result = await authAPI.register(values.email, values.password, values.passwordConfirm, values.name, values.phone);
-      if (result.access_token) {
-        message.success('회원가입이 완료되었습니다!');
-        setActiveTab('login');
-        loginForm.setFieldsValue({ email: values.email, password: '' });
-        registerForm.resetFields();
-      }
+      await authAPI.register(values.email, values.password, values.passwordConfirm, values.name, values.phone);
+      message.success('회원가입이 완료되었습니다!');
+      setActiveTab('login');
+      loginForm.setFieldsValue({ email: values.email, password: '' });
+      registerForm.resetFields();
     } catch (err) {
       // 다양한 에러 응답 형식 처리
       const detail = err.response?.data?.detail;

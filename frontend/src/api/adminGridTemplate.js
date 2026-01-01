@@ -9,12 +9,21 @@ const API_BASE = '/api/v1';
 
 const api = axios.create({
     baseURL: API_BASE,
+    withCredentials: true,
 });
 
+const getCookie = (name) => {
+    const match = document.cookie.match(new RegExp(`(^|; )${name}=([^;]*)`));
+    return match ? decodeURIComponent(match[2]) : null;
+};
+
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+    const method = (config.method || 'get').toLowerCase();
+    if (!['get', 'head', 'options'].includes(method)) {
+        const csrfToken = getCookie('csrf_token');
+        if (csrfToken) {
+            config.headers['X-CSRF-Token'] = csrfToken;
+        }
     }
     return config;
 });

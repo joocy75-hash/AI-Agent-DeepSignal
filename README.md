@@ -294,6 +294,94 @@ python3 backend/scripts/emergency_stop_all.py --user-id 6
 
 ---
 
+## 🤖 에이전트 (MVP)
+
+### 로컬 실행
+
+```bash
+# 개발 보조 에이전트
+python -m tools.agents dev --report-dir tools/agents/reports
+
+# CI/테스트 에이전트
+python -m tools.agents ci --report-dir tools/agents/reports
+
+# 운영 자동화 에이전트 (로그 기반)
+python -m tools.agents ops --log ./backend_local.log --since 10 --health-url http://localhost:8000/health
+
+# 안전 조치 실행 (가드레일 필요)
+OPS_AGENT_EXECUTE=true OPS_AGENT_APPROVAL_TOKEN=change-me \\
+  python -m tools.agents ops --log ./backend_local.log --execute --execute-action validate_env --approval-token change-me
+```
+
+### 필요한 환경 변수 (예시)
+
+```bash
+# 운영 에이전트 실행 모드 가드레일 (기본 false)
+OPS_AGENT_EXECUTE=false
+OPS_AGENT_APPROVAL_TOKEN=change-me
+
+# 쿠키 설정 (보안 개선 시)
+COOKIE_DOMAIN=example.com
+COOKIE_SAMESITE=lax
+COOKIE_SECURE=true
+```
+
+### AI/ML/전략 구성도 (백엔드 매핑)
+
+**전략 로딩/실행**
+- 전략 로더: `backend/src/services/strategy_loader.py`
+- 전략 구현: `backend/src/strategies/` (AI/자율 전략 포함)
+- 기본 전략 모듈: `backend/src/services/strategies/`
+- 동적 전략 실행기: `backend/src/strategies/dynamic_strategy_executor.py`
+
+**AI 에이전트 (매매 의사결정 보조)**
+- 공통 베이스/모델: `backend/src/agents/base.py`, `backend/src/agents/models.py`
+- 오케스트레이터: `backend/src/agents/orchestrator/orchestrator.py`
+- MarketRegimeAgent: `backend/src/agents/market_regime/agent.py`
+- SignalValidatorAgent: `backend/src/agents/signal_validator/agent.py`
+- RiskMonitorAgent: `backend/src/agents/risk_monitor/agent.py`
+- AnomalyDetectionAgent: `backend/src/agents/anomaly_detector/agent.py`
+- PortfolioOptimizationAgent: `backend/src/agents/portfolio_optimizer/agent.py`
+- MLPredictorAgent: `backend/src/agents/ml_predictor/agent.py`
+- 에이전트 API: `backend/src/api/agent_orchestration.py`
+
+**ML 파이프라인**
+- 피처 파이프라인: `backend/src/ml/features/feature_pipeline.py`
+- 피처 계산: `backend/src/ml/features/technical_features.py`, `backend/src/ml/features/structure_features.py`, `backend/src/ml/features/mtf_features.py`
+- 모델 앙상블: `backend/src/ml/models/ensemble_predictor.py`
+- 학습/라벨링/데이터 수집: `backend/src/ml/training/train_all_models.py`, `backend/src/ml/training/labeler.py`, `backend/src/ml/training/data_collector.py`
+- 검증/백테스트/AB 테스트: `backend/src/ml/validation/backtester.py`, `backend/src/ml/validation/ab_tester.py`
+- 모니터링/알림: `backend/src/ml/monitoring/metrics_collector.py`, `backend/src/ml/monitoring/alerter.py`
+- 모델/데이터 저장: `backend/src/ml/saved_models/`, `backend/src/ml/data/`
+
+**AI/LLM 서비스**
+- 통합 AI 서비스: `backend/src/services/ai_optimization/integrated_ai_service.py`
+- DeepSeek 전용: `backend/src/services/deepseek_service.py`
+- AI 전략 API: `backend/src/api/ai_strategy.py`
+- AI 비용/최적화 API: `backend/src/api/ai_cost.py`
+
+### 테스트/CI 실행
+
+```bash
+# 에이전트 테스트 (MVP)
+python -m pytest tools/tests
+
+# CI 파이프라인 로컬 실행
+python -m tools.agents ci --report-dir tools/agents/reports
+
+# Ruff/Black 체크 (에이전트 범위)
+python -m ruff check tools/agents tools/tests
+python -m black --check tools/agents tools/tests
+```
+
+### 운영 에이전트 정책
+
+- **주문(매수/매도) 실행 금지**: ops_agent는 주문 실행을 직접 호출하지 않습니다.
+- **execute 모드 가드레일**: `OPS_AGENT_EXECUTE=true` + `--execute` 옵션이 있어야만 실행 모드가 활성화됩니다.
+- MVP에서는 execute 모드에서도 **안전 조치만 제안**하며, 실제 실행은 추후 승인 플로우를 붙이도록 설계되어 있습니다.
+
+---
+
 ## 🐛 문제 해결
 
 ### 차트가 업데이트 안 됨
@@ -442,3 +530,66 @@ MIT License - 자유롭게 사용, 수정, 배포 가능
 - ✅ 구조화된 Logging
 
 **자세한 내용**: [PROJECT_COMPLETION_SUMMARY.md](PROJECT_COMPLETION_SUMMARY.md) 참조
+
+---
+
+## 🧭 작업 기록 (ETH AI Fusion 전략 교체)
+
+### 목표
+- 기존 전략 전면 제거
+- ETH/USDT 5m 기준 24시간 공격적 진입 + 수익 추매 + 보수적 손절
+- ML 기반 신호 강화 + 기존 에이전트 파이프라인 유지
+
+### 삭제된 전략/모듈
+- `backend/src/strategies/adaptive_market_regime_fighter.py`
+- `backend/src/strategies/ai_autonomous_adaptive_strategy.py`
+- `backend/src/strategies/ai_integrated_smart_strategy.py`
+- `backend/src/strategies/autonomous_30pct_strategy.py`
+- `backend/src/strategies/dynamic_strategy_executor.py`
+- `backend/src/strategies/eth_ai_autonomous_40pct_strategy.py`
+- `backend/src/strategies/proven_conservative_strategy.py`
+- `backend/src/strategies/sol_volatility_regime_15m_strategy.py`
+- `backend/src/services/strategies/ai_strategies.py`
+- `backend/src/services/strategies/ema_strategy.py`
+- `backend/src/services/strategies/rsi_strategy.py`
+- `backend/src/services/strategies/simple_open_close.py`
+
+### 신규/변경 파일
+- `backend/src/strategies/eth_ai_fusion_strategy.py` (메인 전략)
+- `backend/src/services/strategies/eth_ai_fusion.py` (백테스트용 전략)
+- `backend/src/strategies/__init__.py` (전략 코드 단일화: `eth_ai_fusion`)
+- `backend/src/services/strategy_loader.py` (레거시 코드 → `eth_ai_fusion` 매핑)
+- `backend/src/services/strategy_engine.py` (legacy 엔진은 `hold` 기본 반환)
+- `backend/src/services/strategies/registry.py` (백테스트 전략 단일 반환)
+- `backend/src/services/backtest_engine.py` (기본 전략 교체)
+- `backend/src/api/backtest.py` (기본 전략 코드: `eth_ai_fusion`)
+- `backend/src/api/strategy.py` (모든 type → `eth_ai_fusion` 매핑)
+- `backend/src/services/bot_isolation_manager.py` (추매 시 포지션 업데이트)
+- `backend/src/services/bot_runner.py` (ETH/USDT + 5m 기본값, 추매 로직 추가)
+
+### 전략 로직 요약 (ETH AI Fusion)
+- **진입 기준**: EMA(9/21) 방향, RSI(14), MACD 히스토그램, 거래량 비율 점수화. 점수 ≥ 4 및 방향 우세 시 진입
+- **ML 게이트**: FeaturePipeline + EnsemblePredictor 사용. `should_skip_entry` 또는 방향 불일치/타이밍 불량 시 진입 차단
+- **보수적 손절/익절**: ATR% 기반 SL/TP (SL: 0.6~1.6%, ML 신뢰도 높으면 최대 1.8%), TP: 1.2~4.5%
+- **트레일링**: 최대 수익이 TP 도달 시, `max(stop_loss, max_profit*0.5)` 기준으로 이익 보호 청산
+- **추매(수익 구간)**: 0.8% 단위 수익 구간 도달 시 최대 3회, 현재 포지션의 35% 규모로 추가 진입  
+  - RSI 과열/과매도, EMA/MACD 반전, ML 방향 불일치 시 추매 차단
+
+### 에이전트/ML 조합 위치
+- 에이전트 파이프라인은 `backend/src/services/bot_runner.py`에서 유지  
+  (MarketRegimeAgent → SignalValidatorAgent → RiskMonitorAgent)
+- ML은 전략 내부에서 FeaturePipeline/EnsemblePredictor로 사용
+
+### 전략 코드 매핑
+- `backend/src/services/strategy_loader.py`에서 기존 코드 전부 `eth_ai_fusion`으로 매핑
+- `backend/src/api/strategy.py`의 type 매핑도 모두 `eth_ai_fusion`으로 통일
+
+### 롤백 방법
+- 배포 실패 시 수동 롤백(워크플로우 안내와 동일)
+  - `docker tag groupc-backend:rollback groupc-backend:latest`
+  - `docker tag groupc-frontend:rollback groupc-frontend:latest`
+  - `docker compose -f docker-compose.production.yml up -d`
+
+### 배포 참고
+- `deploy-production.yml`는 `**.md` 변경을 배포 트리거에서 제외  
+- 배포는 workflow_dispatch(수동 실행)로 진행
