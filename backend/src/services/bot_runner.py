@@ -1322,7 +1322,7 @@ class BotRunner:
         trade = Trade(
             user_id=user_id,
             bot_instance_id=bot_instance_id,  # 다중 봇 시스템 (NEW)
-            trade_source=TradeSource.BOT_INSTANCE,  # 다중 봇 시스템 (NEW)
+            trade_source=TradeSource.bot_instance,  # 다중 봇 시스템 (NEW)
             symbol=symbol,
             side=side.upper(),
             qty=Decimal(str(qty)),

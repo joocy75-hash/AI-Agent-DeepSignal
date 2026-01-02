@@ -720,7 +720,7 @@ class GridBotRunner:
         trade = Trade(
             user_id=bot_instance.user_id,
             bot_instance_id=bot_instance.id,
-            trade_source=TradeSource.GRID_BOT,
+            trade_source=TradeSource.grid_bot,
             symbol=bot_instance.symbol,
             side="SELL",
             qty=order.sell_filled_qty,

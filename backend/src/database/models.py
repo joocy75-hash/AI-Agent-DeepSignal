@@ -148,12 +148,16 @@ class GridOrderStatus(str, Enum):
 
 
 class TradeSource(str, Enum):
-    """거래 출처 - Values match PostgreSQL enum (lowercase)"""
+    """거래 출처 - Values match PostgreSQL enum (lowercase)
 
-    MANUAL = "manual"  # 수동 거래
-    AI_BOT = "ai_bot"  # AI 봇 거래
-    GRID_BOT = "grid_bot"  # 그리드 봇 거래
-    BOT_INSTANCE = "bot_instance"  # 봇 인스턴스 거래
+    NOTE: Member names MUST be lowercase to match PostgreSQL enum values.
+    SQLAlchemy uses .name (not .value) when inserting into DB.
+    """
+
+    manual = "manual"  # 수동 거래
+    ai_bot = "ai_bot"  # AI 봇 거래
+    grid_bot = "grid_bot"  # 그리드 봇 거래
+    bot_instance = "bot_instance"  # 봇 인스턴스 거래
 
 
 class BotInstance(Base):
@@ -506,7 +510,7 @@ class Trade(Base):
     )
     trade_source = Column(
         SQLEnum(TradeSource, name="tradesource", create_type=False),
-        default=TradeSource.MANUAL,
+        default=TradeSource.manual,
         nullable=False,
     )
 
