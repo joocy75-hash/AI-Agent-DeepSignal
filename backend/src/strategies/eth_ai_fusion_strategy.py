@@ -49,10 +49,22 @@ class ETHAIFusionStrategy:
         self._ema_trend = int(self.params.get("ema_trend", 55))
         self._rsi_length = int(self.params.get("rsi_length", 14))
         self._atr_length = int(self.params.get("atr_length", 14))
-        self._entry_threshold = float(self.params.get("entry_threshold", 4.0))
+        # 진입 조건 강화: 4.0 → 5.0 (더 엄격한 진입)
+        self._entry_threshold = float(self.params.get("entry_threshold", 5.0))
         self._max_adds = int(self.params.get("max_adds", 3))
-        self._add_step = float(self.params.get("add_step_percent", 0.8))
+        self._add_step = float(self.params.get("add_step_percent", 1.5))  # 0.8 → 1.5% (추매 간격 확대)
         self._add_scale = float(self.params.get("add_scale", 0.35))
+
+        # 손절/익절 범위 설정 (개선됨)
+        self._min_stop_loss = float(self.params.get("min_stop_loss", 1.5))  # 0.6 → 1.5%
+        self._max_stop_loss = float(self.params.get("max_stop_loss", 3.0))  # 1.6 → 3.0%
+        self._min_take_profit = float(self.params.get("min_take_profit", 3.0))  # 1.2 → 3.0%
+        self._max_take_profit = float(self.params.get("max_take_profit", 8.0))  # 4.5 → 8.0%
+        self._min_rr_ratio = float(self.params.get("min_rr_ratio", 2.0))  # 최소 R/R 1:2
+
+        # 진입 쿨다운 (연속 진입 방지)
+        self._last_exit_candle_count = 0
+        self._cooldown_candles = int(self.params.get("cooldown_candles", 6))  # 6개 캔들 쿨다운 (30분)
 
     def generate_signal(
         self,
@@ -169,43 +181,98 @@ class ETHAIFusionStrategy:
         return max(0.55, self._confidence_from_score(5.0, ml_result))
 
     def _score_entry(self, snapshot: IndicatorSnapshot) -> Tuple[float, float, list]:
+        """
+        개선된 진입 스코어링 (더 엄격함)
+        - 추세 필터 추가 (EMA 55)
+        - RSI 중립 구간 제외 (45~55는 점수 없음)
+        - 거래량 기준 상향 (1.2배 이상)
+        - 추가 필터: 가격과 EMA 트렌드 정렬
+        """
         long_score = 0.0
         short_score = 0.0
         reasons = []
 
+        # 1. EMA 크로스 (기본)
         if snapshot.ema_fast > snapshot.ema_slow:
-            long_score += 1
+            long_score += 1.0
             reasons.append("ema_fast>ema_slow")
-        if snapshot.ema_fast < snapshot.ema_slow:
-            short_score += 1
+        elif snapshot.ema_fast < snapshot.ema_slow:
+            short_score += 1.0
             reasons.append("ema_fast<ema_slow")
+
+        # 2. 가격 위치 (EMA fast 대비)
         if snapshot.close > snapshot.ema_fast:
-            long_score += 1
+            long_score += 1.0
             reasons.append("price>ema_fast")
-        if snapshot.close < snapshot.ema_fast:
-            short_score += 1
+        elif snapshot.close < snapshot.ema_fast:
+            short_score += 1.0
             reasons.append("price<ema_fast")
-        if snapshot.rsi >= 50:
-            long_score += 1
-        if snapshot.rsi <= 50:
-            short_score += 1
+
+        # 3. 장기 추세 필터 (EMA 55) - 새로 추가
+        if snapshot.close > snapshot.ema_trend:
+            long_score += 1.5  # 장기 추세 정렬 시 가산점
+            reasons.append("price>ema_trend")
+        elif snapshot.close < snapshot.ema_trend:
+            short_score += 1.5
+            reasons.append("price<ema_trend")
+
+        # 4. RSI (중립 구간 제외, 더 명확한 신호만)
+        if snapshot.rsi >= 55 and snapshot.rsi <= 70:  # 적당히 강한 구간
+            long_score += 1.0
+        elif snapshot.rsi >= 70:  # 과매수는 롱 진입에 불리
+            long_score -= 0.5
+        if snapshot.rsi <= 45 and snapshot.rsi >= 30:  # 적당히 약한 구간
+            short_score += 1.0
+        elif snapshot.rsi <= 30:  # 과매도는 숏 진입에 불리
+            short_score -= 0.5
+
+        # 5. MACD 히스토그램 (방향 및 강도)
         if snapshot.macd_hist > 0:
-            long_score += 1
-        if snapshot.macd_hist < 0:
-            short_score += 1
-        if snapshot.volume_ratio >= 1.05:
-            long_score += 1
-            short_score += 1
+            long_score += 1.0
+            if snapshot.macd_hist > snapshot.atr_percent * 0.1:  # 강한 MACD
+                long_score += 0.5
+                reasons.append("strong_macd")
+        elif snapshot.macd_hist < 0:
+            short_score += 1.0
+            if snapshot.macd_hist < -snapshot.atr_percent * 0.1:
+                short_score += 0.5
+                reasons.append("strong_macd")
+
+        # 6. 거래량 확인 (기준 상향: 1.2배 이상)
+        if snapshot.volume_ratio >= 1.2:
+            long_score += 1.0
+            short_score += 1.0
+            reasons.append("high_volume")
+        elif snapshot.volume_ratio < 0.8:  # 거래량 부족 시 감점
+            long_score -= 0.5
+            short_score -= 0.5
 
         return long_score, short_score, reasons
 
     def _risk_targets(self, snapshot: IndicatorSnapshot, ml_result: Any) -> Tuple[float, float]:
-        atr_based = snapshot.atr_percent * 1.2
-        stop_loss = max(0.6, min(1.6, atr_based))
-        take_profit = max(1.2, min(4.5, snapshot.atr_percent * 2.4))
+        """
+        개선된 손절/익절 계산
+        - 손절: 1.5% ~ 3.0% (기존 0.6~1.6%에서 확대)
+        - 익절: 3.0% ~ 8.0% (기존 1.2~4.5%에서 확대)
+        - R/R 비율: 최소 1:2 보장
+        """
+        # ATR 기반 손절 계산 (더 넓은 범위)
+        atr_based_sl = snapshot.atr_percent * 1.5  # ATR의 1.5배
+        stop_loss = max(self._min_stop_loss, min(self._max_stop_loss, atr_based_sl))
 
-        if ml_result and ml_result.stoploss.confidence > 0.55:
-            stop_loss = max(0.6, min(1.8, ml_result.stoploss.optimal_sl_percent))
+        # ATR 기반 익절 계산 (더 높은 목표)
+        atr_based_tp = snapshot.atr_percent * 4.0  # ATR의 4배
+        take_profit = max(self._min_take_profit, min(self._max_take_profit, atr_based_tp))
+
+        # ML 결과 반영 (손절만, 범위 내에서)
+        if ml_result and hasattr(ml_result, 'stoploss') and ml_result.stoploss.confidence > 0.6:
+            ml_sl = ml_result.stoploss.optimal_sl_percent
+            stop_loss = max(self._min_stop_loss, min(self._max_stop_loss, ml_sl))
+
+        # R/R 비율 보장: 익절이 손절의 최소 2배 이상이 되도록
+        min_take_profit_by_rr = stop_loss * self._min_rr_ratio
+        if take_profit < min_take_profit_by_rr:
+            take_profit = min(self._max_take_profit, min_take_profit_by_rr)
 
         return stop_loss, take_profit
 
@@ -262,9 +329,26 @@ class ETHAIFusionStrategy:
         return ((entry_price - current_price) / entry_price) * 100 * leverage
 
     def _should_exit_on_reversal(self, side: str, snapshot: IndicatorSnapshot) -> bool:
+        """
+        추세 반전 청산 조건 (완화됨)
+        - 기존: EMA 크로스 + RSI 45/55 → 너무 민감
+        - 개선: EMA 크로스 + RSI 극단값(35/65) + MACD 반전 확인
+        """
         if side == "long":
-            return snapshot.ema_fast < snapshot.ema_slow and snapshot.rsi < 45
-        return snapshot.ema_fast > snapshot.ema_slow and snapshot.rsi > 55
+            # 롱 청산: EMA 데드크로스 + RSI 과매도 구간 + MACD 음수
+            ema_cross_down = snapshot.ema_fast < snapshot.ema_slow
+            rsi_weak = snapshot.rsi < 35  # 45 → 35 (더 극단적일 때만)
+            macd_negative = snapshot.macd_hist < 0
+            # 3개 조건 중 2개 이상 충족 시에만 청산
+            reversal_signals = sum([ema_cross_down, rsi_weak, macd_negative])
+            return reversal_signals >= 2 and ema_cross_down  # EMA 크로스는 필수
+
+        # 숏 청산: EMA 골든크로스 + RSI 과매수 구간 + MACD 양수
+        ema_cross_up = snapshot.ema_fast > snapshot.ema_slow
+        rsi_strong = snapshot.rsi > 65  # 55 → 65 (더 극단적일 때만)
+        macd_positive = snapshot.macd_hist > 0
+        reversal_signals = sum([ema_cross_up, rsi_strong, macd_positive])
+        return reversal_signals >= 2 and ema_cross_up  # EMA 크로스는 필수
 
     def _confidence_from_score(self, score: float, ml_result: Any) -> float:
         base = 0.45 + min(score, 6.0) * 0.05
