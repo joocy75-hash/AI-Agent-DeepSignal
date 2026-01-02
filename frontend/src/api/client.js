@@ -58,11 +58,25 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+// 토큰 갱신을 시도하지 않을 경로들
+const AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/me'];
+
 // Response interceptor to handle errors with token refresh
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const requestPath = originalRequest?.url || '';
+
+    // 인증 관련 경로에서의 401은 토큰 갱신을 시도하지 않음
+    const isAuthPath = AUTH_PATHS.some(path => requestPath.includes(path));
+    if (isAuthPath) {
+      return Promise.reject(error);
+    }
+
+    // 이미 로그인 페이지에 있으면 리다이렉트하지 않음
+    const isOnLoginPage = window.location.pathname === '/login' ||
+                          window.location.pathname === '/register';
 
     // 401 에러 시 토큰 갱신 시도
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -90,7 +104,10 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        window.location.href = '/login';
+        // 로그인 페이지가 아닐 때만 리다이렉트
+        if (!isOnLoginPage) {
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

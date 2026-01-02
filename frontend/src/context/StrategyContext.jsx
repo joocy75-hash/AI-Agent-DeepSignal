@@ -6,6 +6,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { strategyAPI } from '../api/strategy';
 import apiClient from '../api/client';
+import { useAuth } from './AuthContext';
 
 const StrategyContext = createContext();
 
@@ -13,6 +14,7 @@ const StrategyContext = createContext();
 const CACHE_TTL = 60000;
 
 export function StrategyProvider({ children }) {
+    const { isAuthenticated, loading: authLoading } = useAuth();
     const [strategies, setStrategies] = useState([]);
     const [loading, setLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -114,10 +116,14 @@ export function StrategyProvider({ children }) {
         return loadStrategies(true); // 강제 새로고침
     }, [loadStrategies]);
 
-    // 초기 로드
+    // 초기 로드 - 인증된 경우에만 전략 로드
     useEffect(() => {
+        // 인증 로딩 중이거나 인증되지 않은 경우 스킵
+        if (authLoading || !isAuthenticated) {
+            return;
+        }
         loadStrategies();
-    }, [loadStrategies]);
+    }, [loadStrategies, authLoading, isAuthenticated]);
 
     // Memoize context value to prevent unnecessary re-renders of consumers
     const value = useMemo(() => ({
