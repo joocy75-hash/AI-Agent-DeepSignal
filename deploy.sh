@@ -50,7 +50,20 @@ manage_service() {
         deploy)
             echo -e "${GREEN}Deploying ${group}...${NC}"
             setup_network
-            docker compose -f ${compose_file} up -d --build
+            
+            local env_file=""
+            if [ -f ".env.production" ]; then
+                env_file=".env.production"
+            elif [ -f ".env" ]; then
+                env_file=".env"
+            fi
+            
+            if [ -n "$env_file" ]; then
+                echo -e "${YELLOW}Using environment file: ${env_file}${NC}"
+                docker compose --env-file ${env_file} -f ${compose_file} up -d --build
+            else
+                docker compose -f ${compose_file} up -d --build
+            fi
             ;;
         stop)
             echo -e "${RED}Stopping ${group}...${NC}"
