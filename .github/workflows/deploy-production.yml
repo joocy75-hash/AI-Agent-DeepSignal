@@ -201,6 +201,10 @@ jobs:
           echo "▶️  Restarting Group C services only..."
           echo "   (This does NOT affect other groups: group_a, group_b, group_e, proxy)"
 
+          # Ensure proxy-net network exists (required for external network)
+          echo "🔗 Ensuring proxy-net network exists..."
+          docker network create proxy-net 2>/dev/null || echo "  proxy-net already exists"
+
           # Use 'up -d' which only recreates changed containers
           # This is safer than 'down' as it preserves data and doesn't affect other projects
           docker compose -f docker-compose.production.yml up -d --force-recreate --remove-orphans
