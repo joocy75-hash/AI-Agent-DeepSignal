@@ -4,7 +4,7 @@
 set timeout 600
 set password "Vc8,xn7j_fjdnNGy"
 
-spawn ssh root@158.247.245.197 "cd /root/auto-dashboard && docker compose --env-file .env.production down && docker compose --env-file .env.production build --no-cache && docker compose --env-file .env.production up -d && sleep 10 && docker compose --env-file .env.production ps"
+spawn ssh root@141.164.55.245 "cd /root/auto-dashboard && docker compose --env-file .env.production down && docker compose --env-file .env.production build --no-cache && docker compose --env-file .env.production up -d && sleep 10 && docker compose --env-file .env.production ps"
 
 expect {
     "*password:*" {

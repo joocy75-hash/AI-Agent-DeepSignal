@@ -3,7 +3,7 @@
 # 백엔드 상태 진단 스크립트
 # 사용법: ./scripts/diagnose_backend.sh
 
-SERVER_IP="158.247.245.197"
+SERVER_IP="141.164.55.245"
 SERVER_USER="root"
 PROJECT_DIR="/root/auto-dashboard"
 

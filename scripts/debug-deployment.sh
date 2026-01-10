@@ -7,19 +7,19 @@ echo ""
 
 # 1. 백엔드 상태
 echo "1️⃣ 백엔드 API 상태 확인..."
-BACKEND_HEALTH=$(curl -s http://158.247.245.197:8000/health)
+BACKEND_HEALTH=$(curl -s http://141.164.55.245:8000/health)
 echo "   $BACKEND_HEALTH"
 echo ""
 
 # 2. 프론트엔드 접속
 echo "2️⃣ 프론트엔드 접속 확인..."
-FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://158.247.245.197:3000)
+FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://141.164.55.245:3000)
 echo "   HTTP Status: $FRONTEND_STATUS"
 echo ""
 
 # 3. 로그인 API 테스트
 echo "3️⃣ 로그인 API 직접 테스트..."
-LOGIN_RESULT=$(curl -s -X POST http://158.247.245.197:8000/auth/login \
+LOGIN_RESULT=$(curl -s -X POST http://141.164.55.245:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@admin.com","password":"Admin123!"}')
 echo "   $LOGIN_RESULT" | python3 -m json.tool 2>/dev/null || echo "   $LOGIN_RESULT"
@@ -27,8 +27,8 @@ echo ""
 
 # 4. CORS 헤더 확인
 echo "4️⃣ CORS 헤더 확인..."
-curl -s -I -X OPTIONS http://158.247.245.197:8000/auth/login \
-  -H "Origin: http://158.247.245.197:3000" \
+curl -s -I -X OPTIONS http://141.164.55.245:8000/auth/login \
+  -H "Origin: http://141.164.55.245:3000" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: Content-Type" | grep -i "access-control"
 echo ""
@@ -36,14 +36,14 @@ echo ""
 # 5. 프론트엔드 번들에서 API URL 확인
 echo "5️⃣ 프론트엔드가 사용하는 API URL 확인..."
 echo "   (JavaScript 파일에서 API URL 검색)"
-FRONTEND_HTML=$(curl -s http://158.247.245.197:3000)
+FRONTEND_HTML=$(curl -s http://141.164.55.245:3000)
 JS_FILES=$(echo "$FRONTEND_HTML" | grep -o 'src="[^"]*\.js"' | cut -d'"' -f2 | head -3)
 
 for js_file in $JS_FILES; do
     if [[ $js_file == /* ]]; then
-        js_url="http://158.247.245.197:3000$js_file"
+        js_url="http://141.164.55.245:3000$js_file"
     else
-        js_url="http://158.247.245.197:3000/$js_file"
+        js_url="http://141.164.55.245:3000/$js_file"
     fi
 
     echo "   검사 중: $js_url"
@@ -75,7 +75,7 @@ else
 fi
 
 if [ ! -z "$API_URL" ]; then
-    if echo "$API_URL" | grep -q "158.247.245.197"; then
+    if echo "$API_URL" | grep -q "141.164.55.245"; then
         echo "✅ 프론트엔드 API URL: 올바르게 설정됨 ($API_URL)"
     else
         echo "❌ 프론트엔드 API URL: 잘못됨 ($API_URL)"

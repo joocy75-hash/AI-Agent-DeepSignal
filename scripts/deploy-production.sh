@@ -105,7 +105,7 @@ EOF
     local cors=$(ssh_cmd "grep '^CORS_ORIGINS=' ${SERVER_PATH}/.env 2>/dev/null | cut -d'=' -f2" || echo "")
     if [[ ! "$cors" =~ "deepsignal.shop" ]]; then
         print_warning "Updating CORS_ORIGINS to include deepsignal.shop"
-        local new_cors="https://deepsignal.shop,https://admin.deepsignal.shop,http://158.247.245.197:3000,http://158.247.245.197:4000"
+        local new_cors="https://deepsignal.shop,https://admin.deepsignal.shop,http://141.164.55.245:3201,http://141.164.55.245:3202"
         ssh_cmd "grep -q '^CORS_ORIGINS=' ${SERVER_PATH}/.env && sed -i 's|^CORS_ORIGINS=.*|CORS_ORIGINS=${new_cors}|' ${SERVER_PATH}/.env || echo 'CORS_ORIGINS=${new_cors}' >> ${SERVER_PATH}/.env"
     fi
     print_success "CORS_ORIGINS configured"

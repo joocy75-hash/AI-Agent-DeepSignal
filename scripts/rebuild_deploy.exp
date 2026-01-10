@@ -4,7 +4,7 @@
 set timeout 600
 set password "Vc8,xn7j_fjdnNGy"
 
-spawn ssh root@158.247.245.197 {
+spawn ssh root@141.164.55.245 {
 cd /root/auto-dashboard
 
 echo "=== Pulling latest code ==="

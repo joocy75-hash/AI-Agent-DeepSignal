@@ -4,7 +4,7 @@
 set timeout 300
 set password "Vc8,xn7j_fjdnNGy"
 
-spawn ssh root@158.247.245.197 {
+spawn ssh root@141.164.55.245 {
 cd /root/auto-dashboard
 
 echo "=== Stopping all containers ==="
@@ -29,10 +29,10 @@ JWT_SECRET=super-secret-jwt-key-change-this-in-production-2024
 DATABASE_URL=postgresql+asyncpg://trading_user:TradingBot2024!SecurePassword@postgres:5432/trading_db
 
 # Frontend URLs
-VITE_API_URL=http://158.247.245.197:8000
+VITE_API_URL=http://141.164.55.245:8000
 
 # CORS Origins
-ALLOWED_ORIGINS=http://158.247.245.197:3000,http://158.247.245.197:4000,http://158.247.245.197
+ALLOWED_ORIGINS=http://141.164.55.245:3000,http://141.164.55.245:4000,http://141.164.55.245
 
 # Logging
 LOG_LEVEL=INFO

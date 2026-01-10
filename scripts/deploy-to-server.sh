@@ -1,10 +1,10 @@
 #!/bin/bash
-# Deployment script for Vultr server
-# Server IP: 158.247.245.197
+# Deployment script for Seoul server
+# Server IP: 141.164.55.245
 
 set -e  # Exit on error
 
-SERVER_IP="158.247.245.197"
+SERVER_IP="141.164.55.245"
 SERVER_USER="root"
 PROJECT_DIR="/root/auto-dashboard"
 
@@ -46,11 +46,11 @@ REDIS_PASSWORD=Redis2024!SecurePassword
 ENCRYPTION_KEY=Dz9w_blEMa-tMD5hqK6V7yiaYecQBdsTaO0PJR3ESn8=
 JWT_SECRET=super-secret-jwt-key-change-this-in-production-2024
 
-# Frontend URLs
-VITE_API_URL=http://158.247.245.197:8000
+# Frontend URLs (Use domain for production)
+VITE_API_URL=https://api.deepsignal.shop
 
 # CORS Origins
-ALLOWED_ORIGINS=http://158.247.245.197:3000,http://158.247.245.197:4000,http://158.247.245.197
+ALLOWED_ORIGINS=https://deepsignal.shop,https://admin.deepsignal.shop,http://141.164.55.245:3201,http://141.164.55.245:3202
 
 # Logging
 LOG_LEVEL=INFO

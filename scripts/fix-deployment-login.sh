@@ -4,7 +4,7 @@
 
 set -e  # Exit on error
 
-SERVER_IP="158.247.245.197"
+SERVER_IP="141.164.55.245"
 SERVER_USER="root"
 
 echo "🔧 배포 서버 로그인 문제 해결 중..."
