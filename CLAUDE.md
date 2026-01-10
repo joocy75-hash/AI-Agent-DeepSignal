@@ -15,6 +15,7 @@
 5. [데이터 구조](#데이터-구조)
 6. [금지 사항](#금지-사항)
 7. [문제 해결](#문제-해결)
+8. [진행 중 프로젝트](#진행-중-프로젝트) 🚀 NEW
 
 ---
 
@@ -105,7 +106,38 @@ auto-dashboard/
 - **Database**: PostgreSQL 15
 - **Cache**: Redis 7
 - **AI**: Gemini (Primary), DeepSeek (Fallback)
+- **거래소**: Bitget, Binance, OKX, Bybit, Gate.io (CCXT)
 - **CI/CD**: GitHub Actions
+
+### 다중 거래소 지원 (2026-01-10 구현 완료)
+
+| 거래소 | REST API | WebSocket | Passphrase |
+|--------|----------|-----------|------------|
+| Bitget | ✅ | ✅ | 필수 |
+| Binance | ✅ | ✅ | 불필요 |
+| OKX | ✅ | ✅ | 필수 |
+| Bybit | ✅ | ✅ | 불필요 |
+| Gate.io | ✅ | ✅ | 불필요 |
+
+**핵심 파일**:
+- `backend/src/services/exchanges/base.py` - 추상 인터페이스
+- `backend/src/services/exchanges/factory.py` - 팩토리 패턴
+- `backend/src/services/exchanges/{거래소}.py` - 각 거래소 구현
+- `backend/src/services/exchange_service.py` - 사용자별 클라이언트 관리
+
+**사용 예시**:
+```python
+from src.services.exchange_service import ExchangeService
+
+# 사용자의 거래소 클라이언트 가져오기
+client, exchange_name = await ExchangeService.get_user_exchange_client(session, user_id)
+
+# 잔고 조회
+balance = await client.get_futures_balance()
+
+# 포지션 조회
+positions = await client.get_positions()
+```
 
 ---
 
@@ -247,7 +279,7 @@ class MyNewStrategy:
 - **심볼**: ETHUSDT
 - **타임프레임**: 5m
 - **레버리지**: 10-20x (변동성 기반)
-- **마진 한도**: 40% (하드코딩)
+- **마진 한도**: 40% (하드코딩) - 멀티봇에는 미적용
 
 **로직 요약**:
 - 진입: EMA(9/21), RSI(14), MACD, 거래량 점수화 (≥4점)
@@ -320,10 +352,12 @@ signal_result = {
    git push hetzner main
    ```
 
-2. **40% 마진 한도 변경**
+2. **기존 단일 봇 전략의 40% 마진 한도 변경**
    ```python
+   # ETHAIFusionStrategy 등 기존 전략에만 적용
    MAX_MARGIN_PERCENT = 40.0  # 절대 변경 금지
    ```
+   > **참고**: 멀티봇 시스템은 잔고 초과만 체크 (40% 한도 미적용)
 
 3. **데이터 구조 변경**
    - `current_position`, `signal_result` 구조 유지 필수
@@ -355,7 +389,7 @@ signal_result = {
 - [ ] `current_position` 파라미터 전달?
 
 **eth_ai_fusion_strategy.py**:
-- [ ] 40% 마진 한도 유지?
+- [ ] 40% 마진 한도 유지? (멀티봇은 별도)
 - [ ] `_risk_targets()` 로직 유지?
 - [ ] ML 연동 유지?
 
@@ -457,13 +491,77 @@ curl -b cookies.txt -X GET "https://api.deepsignal.shop/api/v1/bot/status" \
 - JWT 토큰 만료 (Access: 1h, Refresh: 7d)
 - 그룹별 Docker 네트워크 격리
 
+### 보안 수정 이력 (2026-01-10)
+
+| 취약점 | 파일 | 상태 |
+|--------|------|------|
+| Rate Limit JWT 미인증 | `middleware/rate_limit.py` | ✅ 수정됨 |
+| ReDoS 정규식 취약점 | `utils/validators.py` | ✅ 수정됨 |
+| Pydantic ClassVar 오류 | `schemas/account_schema.py` | ✅ 수정됨 |
+| 업로드 용량 제한 | `api/upload.py` | ✅ 이미 구현됨 |
+
+---
+
+## 진행 중 프로젝트
+
+### 🚀 멀티봇 트레이딩 시스템 (v2.0)
+
+사용자가 여러 전략 봇을 동시에 운용할 수 있는 시스템 구현 중
+
+**상태**: 계획 수립 완료, 구현 대기
+
+**버전**: v2.0 (2026-01-10 업데이트)
+
+**핵심 문서**:
+- [상세 구현 계획서](./docs/MULTI_BOT_IMPLEMENTATION_PLAN.md)
+- [진행 상황 추적](./docs/MULTIBOT_PROGRESS.md)
+- [구현 스킬](./.claude/skills/multibot-implementation.md)
+
+**v2.0 주요 변경**:
+| 항목 | v1 | v2 |
+|------|----|----|
+| 마진 한도 | 40% 강제 | **잔고 초과만 체크** |
+| 최대 봇 | 10개 | **5개** |
+| 전략 템플릿 | StrategyTemplate (신규) | **TrendBotTemplate (기존 활용)** |
+| 단일 봇 | 레거시 호환 유지 | **폐지** |
+
+**주요 기능**:
+- 전략별 카드 UI (금액만 입력하면 즉시 시작)
+- 사용자당 최대 5개 봇 동시 운용
+- 잔고 초과만 체크 (40% 한도 없음)
+- 봇별 독립 수익률 추적
+
+**핵심 로직 변경**:
+```python
+# v1 (40% 한도)
+if new_percent > 40.0:
+    return (False, "마진 한도 초과")
+
+# v2 (잔고 초과만 체크)
+if used_amount + amount > total_balance:
+    return (False, "잔고가 부족합니다")
+```
+
+**작업 분배** (여러 AI 협업):
+```
+Phase 1: DB 스키마        → AI-1
+Phase 2: 백엔드 API       → AI-1, AI-2
+Phase 3: 봇 러너 수정     → AI-2, AI-3
+Phase 4: 프론트엔드       → AI-3, AI-4
+Phase 5: 테스트/배포      → AI-4
+```
+
 ---
 
 ## 변경 이력
 
 | 날짜 | 내용 |
 |------|------|
-| 2026-01-10 | **CLAUDE.md 최적화** - 35k chars 이하로 압축 |
+| 2026-01-10 | **멀티봇 시스템 v2.0** - 40% 한도 제거, 최대 봇 5개, TrendBotTemplate 활용 |
+| 2026-01-10 | **멀티봇 시스템** - 구현 계획서 및 스킬 파일 작성 |
+| 2026-01-10 | **다중 거래소 지원** - Binance, OKX, Bybit, Gate.io 추가 (REST+WS) |
+| 2026-01-10 | **보안 수정** - Rate Limit JWT 인증, ReDoS 취약점 수정 |
+| 2026-01-10 | **테스트 추가** - ExchangeFactory 24개 유닛 테스트 |
 | 2026-01-09 | 서울 서버 IP 및 통합 배포 스크립트 적용 |
 | 2026-01-02 | 프로젝트 구조 및 상세 가이드 추가 |
 | 2026-01-01 | ETH AI Fusion 전략으로 전면 교체 |

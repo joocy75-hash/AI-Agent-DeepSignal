@@ -31,6 +31,7 @@ from .api import (
     bot_instances,  # 다중 봇 시스템 API (NEW)
     grid_bot,  # 그리드 봇 API (NEW)
     grid_template,  # 그리드 템플릿 사용자 API (NEW)
+    multibot,  # 멀티봇 트레이딩 API v2.0 (NEW)
     strategy,
     account,
     order,
@@ -260,6 +261,7 @@ def create_app() -> FastAPI:
     # 봇 관리
     api_v1_router.include_router(bot.router)
     api_v1_router.include_router(bot_instances.router)  # 다중 봇 시스템
+    api_v1_router.include_router(multibot.router)  # 멀티봇 트레이딩 v2.0
     api_v1_router.include_router(grid_bot.router)  # 그리드 봇
 
     # 전략 및 백테스트

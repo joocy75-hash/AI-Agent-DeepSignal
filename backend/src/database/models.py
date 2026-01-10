@@ -111,8 +111,8 @@ class ExitReason(str, Enum):
 
 # ============================================================
 # 다중 봇 시스템 모델 (Multi-Bot System)
-# 문서: docs/MULTI_BOT_01_OVERVIEW.md, MULTI_BOT_02_DATABASE.md
-# 목적: 사용자당 여러 봇 인스턴스 운영 지원
+# 문서: docs/MULTI_BOT_IMPLEMENTATION_PLAN.md
+# 목적: 사용자당 여러 봇 인스턴스 운영 지원 (최대 5개)
 # ============================================================
 
 
@@ -164,9 +164,9 @@ class BotInstance(Base):
     """
     봇 인스턴스 테이블
 
-    - 사용자당 최대 10개 봇 생성 가능
-    - 각 봇은 독립적인 전략, 심볼, 잔고 할당을 가짐
-    - allocation_percent: 사용자 전체 잔고 중 이 봇에 할당된 비율
+    - 사용자당 최대 5개 봇 생성 가능
+    - 각 봇은 독립적인 전략, 심볼, 투자금액을 가짐
+    - allocated_amount: 사용자가 입력한 투자금액 (USDT)
     """
 
     __tablename__ = "bot_instances"
@@ -182,6 +182,10 @@ class BotInstance(Base):
         CheckConstraint(
             "max_positions >= 1 AND max_positions <= 20",
             name="check_bot_positions_range",
+        ),
+        CheckConstraint(
+            "allocated_amount >= 0",
+            name="check_allocated_amount_positive",
         ),
         Index("idx_bot_instances_user_id", "user_id"),
         Index("idx_bot_instances_user_running", "user_id", "is_running"),
@@ -201,8 +205,11 @@ class BotInstance(Base):
     description = Column(Text, nullable=True)
     bot_type = Column(SQLEnum(BotType), default=BotType.AI_TREND, nullable=False)
 
-    # 잔고 할당 (사용자 전체 잔고의 %)
+    # 잔고 할당 (사용자 전체 잔고의 %) - 기존 호환성 유지
     allocation_percent = Column(Numeric(5, 2), nullable=False, default=10.0)
+
+    # 투자금액 (USDT) - 멀티봇 시스템에서 사용
+    allocated_amount = Column(Numeric(15, 2), nullable=True, default=0)
 
     # 심볼 설정
     symbol = Column(String(20), nullable=False, default="BTCUSDT")
@@ -225,11 +232,13 @@ class BotInstance(Base):
     last_stopped_at = Column(DateTime, nullable=True)
     last_trade_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)
+    last_signal_at = Column(DateTime, nullable=True)  # 마지막 시그널 시간
 
     # 통계 (실시간 업데이트)
     total_trades = Column(Integer, default=0, nullable=False)
     winning_trades = Column(Integer, default=0, nullable=False)
     total_pnl = Column(Numeric(20, 8), default=0, nullable=False)
+    current_pnl_percent = Column(Numeric(10, 4), nullable=True, default=0)  # 현재 수익률 %
 
     # 타임스탬프
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -242,10 +251,16 @@ class BotInstance(Base):
         Integer, ForeignKey("grid_bot_templates.id", ondelete="SET NULL"), nullable=True
     )
 
+    # 트렌드봇 템플릿 참조 (AI 트렌드봇이 템플릿에서 생성된 경우)
+    trend_template_id = Column(
+        Integer, ForeignKey("trend_bot_templates.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Relationships
     user = relationship("User", backref="bot_instances")
     strategy = relationship("Strategy", backref="bot_instances")
     template = relationship("GridBotTemplate", back_populates="instances")
+    trend_template = relationship("TrendBotTemplate", back_populates="instances")
     grid_config = relationship(
         "GridBotConfig",
         back_populates="bot_instance",
@@ -932,8 +947,52 @@ class TrendBotTemplate(Base):
     creator = relationship(
         "User", foreign_keys=[created_by], backref="created_trend_templates"
     )
+    instances = relationship("BotInstance", back_populates="trend_template")
 
     def __repr__(self):
         return (
             f"<TrendBotTemplate {self.symbol} {self.direction.value} {self.leverage}x>"
         )
+
+
+# ============================================================
+# 사용자 마진 사용량 캐시 (User Margin Usage Cache)
+# 목적: 실시간 마진 사용량 추적 및 빠른 조회
+# ============================================================
+
+
+class UserMarginUsage(Base):
+    """
+    사용자별 마진 사용량 캐시
+
+    - 실시간으로 업데이트되는 마진 사용량
+    - 봇 시작/정지 시 자동 갱신
+    - 잔고 조회 결과를 캐싱하여 성능 최적화
+    """
+
+    __tablename__ = "user_margin_usage"
+
+    __table_args__ = (
+        Index("idx_user_margin_usage_user_id", "user_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+
+    # 잔고 정보 (캐시)
+    total_balance = Column(Numeric(15, 2), default=0, nullable=False)  # 총 잔고 (USDT)
+    used_margin = Column(Numeric(15, 2), default=0, nullable=False)  # 사용 중인 마진 (USDT)
+    available_margin = Column(Numeric(15, 2), default=0, nullable=False)  # 사용 가능한 마진 (USDT)
+
+    # 봇 정보
+    active_bot_count = Column(Integer, default=0, nullable=False)  # 활성 봇 개수
+
+    # 타임스탬프
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    # Relationships
+    user = relationship("User", backref="margin_usage")

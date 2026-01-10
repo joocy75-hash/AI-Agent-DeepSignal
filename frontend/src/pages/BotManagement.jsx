@@ -41,6 +41,7 @@ import {
 } from '@ant-design/icons';
 
 import botInstancesAPI from '../api/botInstances';
+import multibotAPI from '../api/multibot';
 // import { useStrategies } from '../context/StrategyContext';  // 템플릿 컴셉으로 사용 안함
 
 // AI 봇 컴포넌트
@@ -127,13 +128,36 @@ export default function BotManagement() {
         }
     }, []);
 
-    // 통계 요약 로드
+    // 통계 요약 로드 (멀티봇 API v2.0)
     const loadSummary = useCallback(async () => {
         try {
-            const response = await botInstancesAPI.getSummary();
-            setSummary(response);
+            const response = await multibotAPI.getSummary();
+            // 멀티봇 API 응답을 기존 형식에 맞게 매핑
+            setSummary({
+                total_bots: response.active_bot_count,
+                running_bots: response.bots?.filter(b => b.is_running).length || 0,
+                total_pnl: response.total_pnl,
+                total_pnl_percent: response.total_pnl_percent,
+                overall_win_rate: response.bots?.length > 0
+                    ? response.bots.reduce((sum, b) => sum + (b.win_rate || 0), 0) / response.bots.length
+                    : 0,
+                // 잔고 정보 추가 (v2.0)
+                total_balance: response.total_balance,
+                used_amount: response.used_amount,
+                available_amount: response.available_amount,
+                max_bot_count: response.max_bot_count,
+            });
+            // 사용 가능 잔고 업데이트
+            setAvailableAllocation(response.available_amount || 0);
         } catch (err) {
             console.error('통계 요약 로드 실패:', err);
+            // 폴백: 기존 API 시도
+            try {
+                const fallback = await botInstancesAPI.getSummary();
+                setSummary(fallback);
+            } catch {
+                // 둘 다 실패
+            }
         }
     }, []);
 

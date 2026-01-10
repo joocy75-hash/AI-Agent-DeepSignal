@@ -21,7 +21,7 @@ import {
     ArrowUpOutlined,
     ArrowDownOutlined,
 } from '@ant-design/icons';
-import { trendTemplateAPI } from '../../../api/trendTemplate';
+import { multibotAPI } from '../../../api/multibot';
 import './UseTrendTemplateModal.css';
 
 const { Panel } = Collapse;
@@ -85,9 +85,19 @@ const UseTrendTemplateModal = ({
 
         setLoading(true);
         try {
-            const result = await trendTemplateAPI.useTemplate(template.id, {
-                investment_amount: investmentAmount,
-                leverage: leverage,
+            // 사전 잔고 확인 (v2.0)
+            const balanceCheck = await multibotAPI.checkBalance(investmentAmount);
+            if (!balanceCheck.available) {
+                message.error(balanceCheck.message);
+                setLoading(false);
+                return;
+            }
+
+            // 멀티봇 API로 봇 시작 (v2.0)
+            const result = await multibotAPI.startBot({
+                template_id: template.id,
+                amount: investmentAmount,
+                name: `${template.name} Bot`,
             });
 
             message.success('🎉 AI 추세 봇이 생성되고 자동 시작되었습니다!');
